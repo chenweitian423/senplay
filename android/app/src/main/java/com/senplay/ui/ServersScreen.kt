@@ -481,12 +481,48 @@ private fun ServerBrowserScreen(
                 }
             }
         } else {
+            // This composable has no store of its own; the settings it reads are
+            // global, so it reaches for them directly.
+            val displayContext = LocalContext.current
+            val display = remember(displayContext) {
+                ListDisplay(LibraryStore.get(displayContext))
+            }
             LazyColumn(modifier = Modifier.fillMaxWidth()) {
                 items(visible, key = { it.url + it.name }) { entry ->
                     ListItem(
-                        headlineContent = { Text(entry.name, maxLines = 2) },
-                        supportingContent = entry.subtitle.ifBlank { null }?.let { text ->
-                            { Text(text, style = MaterialTheme.typography.bodySmall) }
+                        headlineContent = {
+                            Text(entry.name, maxLines = if (display.ellipsis) 1 else 2)
+                        },
+                        supportingContent = {
+                            val detail = rowDetail(entry, display)
+                            if (entry.subtitle.isNotBlank() || detail != null) {
+                                Column {
+                                    if (entry.subtitle.isNotBlank()) {
+                                        Text(
+                                            entry.subtitle,
+                                            style = MaterialTheme.typography.bodySmall
+                                        )
+                                    }
+                                    detail?.let {
+                                        Text(
+                                            it,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    if (display.showProgress && entry.durationMs > 0 &&
+                                        entry.positionMs > 0
+                                    ) {
+                                        LinearProgressIndicator(
+                                            progress = {
+                                                (entry.positionMs.toFloat() / entry.durationMs)
+                                                    .coerceIn(0f, 1f)
+                                            },
+                                            modifier = Modifier.fillMaxWidth(0.5f)
+                                        )
+                                    }
+                                }
+                            }
                         },
                         leadingContent = {
                             Icon(
@@ -540,6 +576,44 @@ private fun ServerBrowserScreen(
             }
         )
     }
+}
+
+/**
+ * Which of the list-detail toggles are on. Read once when the screen opens, so the
+ * row body decides what to draw rather than laying everything out and hiding it.
+ */
+private class ListDisplay(store: LibraryStore) {
+    val showSize = store.prefBool("list.showSize", true)
+    val showDuration = store.prefBool("list.showDuration", true)
+    val showProgress = store.prefBool("list.showProgress", true)
+    val showCount = store.prefBool("list.showCount", true)
+    val ellipsis = store.prefBool("list.ellipsis", false)
+}
+
+/**
+ * The secondary line under a row's title, assembled from whatever this entry
+ * actually has. Nothing is shown that the source did not supply — a plain WebDAV
+ * listing reports a size but no duration, and a directory reports a count instead.
+ */
+private fun rowDetail(entry: MediaEntry, display: ListDisplay): String? {
+    val parts = mutableListOf<String>()
+    if (entry.isDirectory) {
+        if (display.showCount && entry.childCount > 0) parts += "${entry.childCount} 项"
+    } else {
+        if (display.showSize && entry.size > 0) {
+            parts += android.text.format.Formatter.formatFileSize(null, entry.size)
+        }
+        if (display.showDuration && entry.durationMs > 0) parts += clock(entry.durationMs)
+    }
+    return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
+}
+
+private fun clock(millis: Long): String {
+    val total = millis / 1000
+    val hours = total / 3600
+    val minutes = (total % 3600) / 60
+    return if (hours > 0) "%d:%02d:%02d".format(hours, minutes, total % 60)
+    else "%d:%02d".format(minutes, total % 60)
 }
 
 /** Percent-encodes a credential so an `@` or `:` inside it cannot break the URL. */

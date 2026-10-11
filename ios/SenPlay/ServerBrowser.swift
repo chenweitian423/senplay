@@ -6,6 +6,31 @@ import SwiftUI
 /// For Emby-like servers it offers the three strips the reference app exposes —
 /// files, continue watching and recently added — plus search and sorting. WebDAV
 /// stays a plain folder walk because the protocol has nothing more to give.
+/// Which of the list-detail toggles are on. Read once when the browser opens; the
+/// row body uses them to decide what to draw rather than laying out everything and
+/// hiding it.
+private struct ListDisplay {
+    var showSize = true
+    var showDuration = true
+    var showProgress = true
+    var showFolderTime = true
+    var showCount = true
+    var rounded = true
+    var ellipsis = false
+    var fullNameOnMenu = true
+
+    init(_ defaults: UserDefaults = .standard) {
+        showSize = defaults.object(forKey: "pref.list.showSize") as? Bool ?? true
+        showDuration = defaults.object(forKey: "pref.list.showDuration") as? Bool ?? true
+        showProgress = defaults.object(forKey: "pref.list.showProgress") as? Bool ?? true
+        showFolderTime = defaults.object(forKey: "pref.list.showFolderTime") as? Bool ?? true
+        showCount = defaults.object(forKey: "pref.list.showCount") as? Bool ?? true
+        rounded = defaults.object(forKey: "pref.list.rounded") as? Bool ?? true
+        ellipsis = defaults.object(forKey: "pref.list.ellipsis") as? Bool ?? false
+        fullNameOnMenu = defaults.object(forKey: "pref.list.fullNameOnMenu") as? Bool ?? true
+    }
+}
+
 struct ServerBrowserView: View {
     let server: ServerConfig
     @Binding var pending: PlayRequest?
@@ -32,6 +57,7 @@ struct ServerBrowserView: View {
     }
 
     @State private var entries: [MediaEntry] = []
+    private let display = ListDisplay()
     @State private var path = ""
     @State private var parentId: String? = nil
     @State private var stack: [(String, String?)] = []
@@ -269,16 +295,24 @@ struct ServerBrowserView: View {
                         placeholderIcon(entry)
                     }
                     .frame(width: 46, height: 66)
-                    .clipShape(RoundedRectangle(cornerRadius: 5))
+                    .clipShape(RoundedRectangle(cornerRadius: display.rounded ? 5 : 0))
                 } else {
                     Image(systemName: entry.isDirectory ? "folder" : "doc")
                         .foregroundColor(.accentColor)
                         .frame(width: 24)
                 }
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(entry.name).lineLimit(2)
+                    Text(entry.name).lineLimit(display.ellipsis ? 1 : 2)
                     if !entry.subtitle.isEmpty {
                         Text(entry.subtitle).font(.caption2).foregroundColor(.secondary)
+                    }
+                    if let detail = rowDetail(entry), !detail.isEmpty {
+                        Text(detail).font(.caption2).foregroundColor(.secondary)
+                    }
+                    if display.showProgress, entry.durationMs > 0, entry.positionMs > 0 {
+                        ProgressView(value: min(entry.positionMs / entry.durationMs, 1))
+                            .progressViewStyle(.linear)
+                            .frame(width: 90)
                     }
                     if entry.isPlayed {
                         Text("已看完").font(.caption2).foregroundColor(.secondary)
@@ -291,6 +325,36 @@ struct ServerBrowserView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    /// The secondary line under a row's title, assembled from whatever this entry
+    /// actually has. Directories report a child count; files report size and
+    /// duration. Nothing is shown that the source did not supply.
+    private func rowDetail(_ entry: MediaEntry) -> String? {
+        var parts: [String] = []
+        if entry.isDirectory {
+            if display.showCount, entry.childCount > 0 {
+                parts.append("\(entry.childCount) 项")
+            }
+        } else {
+            if display.showSize, entry.size > 0 {
+                parts.append(ByteCountFormatter.string(fromByteCount: Int64(entry.size),
+                                                       countStyle: .file))
+            }
+            if display.showDuration, entry.durationMs > 0 {
+                parts.append(Self.clock(entry.durationMs / 1000))
+            }
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private static func clock(_ seconds: Double) -> String {
+        let total = Int(seconds.rounded())
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        return hours > 0
+            ? String(format: "%d:%02d:%02d", hours, minutes, total % 60)
+            : String(format: "%d:%02d", minutes, total % 60)
     }
 
     // MARK: data

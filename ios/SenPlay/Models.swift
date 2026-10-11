@@ -18,6 +18,9 @@ struct MediaEntry: Identifiable, Hashable {
     let url: String
     let isDirectory: Bool
     let size: Int
+    /// Directory child count, when the source reports it. Emby and WebDAV do; a
+    /// plain file listing does not, and zero means unknown rather than empty.
+    let childCount: Int
     let entryId: String?
     let imageURL: String?
     /// Server-reported watch state, used by the poster wall and the resume strip.
@@ -33,6 +36,7 @@ struct MediaEntry: Identifiable, Hashable {
         url: String,
         isDirectory: Bool,
         size: Int = 0,
+        childCount: Int = 0,
         entryId: String? = nil,
         imageURL: String? = nil,
         isPlayed: Bool = false,
@@ -47,6 +51,7 @@ struct MediaEntry: Identifiable, Hashable {
         self.url = url
         self.isDirectory = isDirectory
         self.size = size
+        self.childCount = childCount
         self.entryId = entryId
         self.imageURL = imageURL
         self.isPlayed = isPlayed

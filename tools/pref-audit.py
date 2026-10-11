@@ -26,6 +26,8 @@ IOS_SETTINGS_UI = {"Preferences.swift"}
 ANDROID_SETTINGS_UI = {"SettingsScreen.kt"}
 
 IOS_DECL = re.compile(r'static let (\w+) = "([^"]+)"')
+# @AppStorage("pref.x") names a key inline rather than through PrefKey.
+IOS_LITERAL = re.compile(r'@AppStorage\("([^"]+)"\)')
 ANDROID_DECL = re.compile(r'private const val (P_\w+) = "([^"]+)"')
 ANDROID_ROW = re.compile(r'Pref(?:Switch|Choice|Slider|Text)\(\s*store,\s*"([^"]+)"')
 
@@ -45,6 +47,10 @@ def scan(sources: list[pathlib.Path], decl_re: re.Pattern, settings_ui: set[str]
     for path in sources:
         if path.name in settings_ui:
             continue
+        # A literal-bound key is read wherever the property is used, so the binding
+        # itself does not count; look for the property name afterwards.
+        for key in IOS_LITERAL.findall(path.read_text(encoding="utf-8")):
+            live.setdefault(key, set())
         for line in path.read_text(encoding="utf-8").splitlines():
             stripped = line.strip()
             if stripped.startswith("//") or stripped.startswith("*") or stripped.startswith("///"):
@@ -86,6 +92,12 @@ def main() -> int:
         if path.name in IOS_SETTINGS_UI:
             continue
     android = android_live()
+
+    # Inline-bound keys on the settings surface still count as declared.
+    for path in ios_sources:
+        if path.name in IOS_SETTINGS_UI:
+            for key in IOS_LITERAL.findall(path.read_text(encoding="utf-8")):
+                ios.setdefault(key, set())
 
     all_keys = sorted(set(ios) | set(android))
     dead = [k for k in all_keys if not ios.get(k) and not android.get(k)]
