@@ -1356,8 +1356,10 @@ struct PlayerScreen: View {
             return
         }
         UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
-        UIPasteboard.general.image = image
-        toast = "已保存截图"
+        if screenshotToClipboard {
+            UIPasteboard.general.image = image
+        }
+        toast = screenshotToClipboard ? "已保存截图并复制" : "已保存截图"
         scheduleToastClear()
     }
 

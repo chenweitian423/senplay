@@ -1,12 +1,15 @@
 package com.senplay.player
 
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Bundle
+import android.view.SurfaceView
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -198,6 +201,7 @@ private const val P_SHOW_START_TITLE = "ui.showStartTitle"
 private const val P_AUTO_FULLSCREEN = "ui.autoFullScreen"
 private const val P_DANMAKU_KEYWORDS = "danmaku.keywords"
 private const val P_DANMAKU_BOTTOM_FLOAT = "danmaku.bottomToFloat"
+private const val P_SCREENSHOT_TO_CLIPBOARD = "video.screenshotToClipboard"
 private const val P_REMEMBER_SPEED = "play.rememberSpeed"
 private const val P_LAST_SPEED = "play.lastSpeed"
 
@@ -268,6 +272,9 @@ fun PlayerScreen(
     val showStartTitle = remember { store.prefBool(P_SHOW_START_TITLE, true) }
     val autoFullScreen = remember { store.prefBool(P_AUTO_FULLSCREEN, false) }
     val bottomToFloat = remember { store.prefBool(P_DANMAKU_BOTTOM_FLOAT, false) }
+    val screenshotToClipboard = remember {
+        store.prefBool(P_SCREENSHOT_TO_CLIPBOARD, true)
+    }
     /** Separators are whatever the viewer typed, not a single fixed character. */
     val blockedKeywords = remember {
         store.prefString(P_DANMAKU_KEYWORDS, "")
@@ -381,6 +388,65 @@ fun PlayerScreen(
     fun showHud(text: String) {
         hud = text
     }
+
+    fun saveScreenshot(bitmap: android.graphics.Bitmap) {
+        val resolver = context.contentResolver
+        val values = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.Images.Media.DISPLAY_NAME,
+                "senplay-" + System.currentTimeMillis() + ".png")
+            put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")
+            put(android.provider.MediaStore.Images.Media.RELATIVE_PATH,
+                android.os.Environment.DIRECTORY_PICTURES + "/SenPlay")
+        }
+        val uri = resolver.insert(
+            android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values
+        )
+        if (uri == null) {
+            showHud("截图失败")
+            return
+        }
+        runCatching {
+            resolver.openOutputStream(uri)?.use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        }.onFailure {
+            showHud("截图失败")
+            return
+        }
+        if (screenshotToClipboard) {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newUri(resolver, "SenPlay", uri))
+        }
+        showHud(if (screenshotToClipboard) "已保存截图并复制" else "已保存截图")
+    }
+
+    /**
+     * Copies the current video frame out of the surface.
+     *
+     * The button used to show "已保存截图" and save nothing, which is worse than an
+     * absent button: the viewer walks away believing the frame is in their gallery.
+     */
+    fun captureFrame(view: PlayerView?) {
+        val surface = view?.videoSurfaceView as? SurfaceView
+        if (surface == null || surface.width == 0 || surface.height == 0) {
+            showHud("截图失败")
+            return
+        }
+        val bitmap = android.graphics.Bitmap.createBitmap(
+            surface.width, surface.height, android.graphics.Bitmap.Config.ARGB_8888
+        )
+        android.view.PixelCopy.request(
+            surface, bitmap,
+            { result ->
+                if (result == android.view.PixelCopy.SUCCESS) {
+                    saveScreenshot(bitmap)
+                } else {
+                    showHud("截图失败")
+                }
+            },
+            android.os.Handler(android.os.Looper.getMainLooper())
+        )
+    }
+
+
 
     fun advanceToNext(next: Pair<String, String>) {
         upNext = null
@@ -583,10 +649,12 @@ fun PlayerScreen(
                 )
             }
     ) {
+        var playerView by remember { mutableStateOf<PlayerView?>(null) }
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
                 PlayerView(ctx).apply {
+                    playerView = this
                     this.player = player
                     useController = false
                     setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
@@ -652,7 +720,7 @@ fun PlayerScreen(
                         modifier = Modifier.weight(1f)
                     )
                     if (showScreenshot) {
-                        IconButton(onClick = { showHud("已保存截图") }) {
+                        IconButton(onClick = { captureFrame(playerView) }) {
                             Icon(Icons.Filled.PhotoCamera, contentDescription = "截图", tint = Color.White)
                         }
                     }
