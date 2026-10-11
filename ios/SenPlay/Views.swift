@@ -210,14 +210,14 @@ struct ServersView: View {
     @State private var newPassword = ""
     @State private var showingDiscovery = false
 
-    private let types = ["webdav", "emby", "jellyfin", "feiniu", "plex", "ftp"]
+    private let types = ["webdav", "emby", "jellyfin", "feiniu", "plex", "ftp", "s3"]
 
     var body: some View {
         NavigationView {
             List {
                 Section(header: Text("媒体服务器")) {
                     if store.servers.isEmpty {
-                        Text("支持 WebDAV / Emby / Jellyfin / 飞牛 fnOS / Plex / FTP。也可以用 senplay://importserver?type=webdav&address=... 导入，或直接扫描局域网。")
+                        Text("支持 WebDAV / Emby / Jellyfin / 飞牛 fnOS / Plex / FTP / S3 对象存储。也可以用 senplay://importserver?type=webdav&address=... 导入，或直接扫描局域网。")
                             .font(.footnote)
                             .foregroundColor(.secondary)
                     }

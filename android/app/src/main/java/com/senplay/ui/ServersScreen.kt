@@ -69,7 +69,7 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 
 private val SERVER_TYPES =
-    listOf("webdav", "emby", "jellyfin", "feiniu", "plex", "smb", "ftp", "sftp")
+    listOf("webdav", "emby", "jellyfin", "feiniu", "plex", "smb", "ftp", "sftp", "s3")
 
 @Composable
 fun ServersScreen(store: LibraryStore, onPlay: (PlayRequest) -> Unit) {
@@ -233,6 +233,17 @@ private fun ServerBrowserScreen(
                         positionMs = item.viewOffsetMs,
                         year = item.year,
                         imageUrl = client.artworkUrl(item)
+                    )
+                }
+            } else if (server.type == "s3") {
+                val target = com.senplay.net.S3Target.of(server)
+                    ?: error("S3 配置不完整：地址需为 bucket@host/前缀，账号填 AccessKey，密码填 SecretKey")
+                com.senplay.net.S3.list(target, path.ifBlank { null }).map { object3 ->
+                    MediaEntry(
+                        name = object3.name,
+                        url = object3.key,
+                        isDirectory = object3.isDirectory,
+                        size = object3.size
                     )
                 }
             } else if (server.type == "sftp") {
@@ -402,7 +413,21 @@ private fun ServerBrowserScreen(
                 }
             } else {
                 val subtitle = matchSubtitle(entry)
-                val request = if (server.type == "plex") {
+                val request = if (server.type == "s3") {
+                    val target = com.senplay.net.S3Target.of(server)
+                    val signed = target?.let { com.senplay.net.S3.presignedUrl(it, entry.url) }
+                    if (signed == null) {
+                        error = "无法生成 S3 下载地址"
+                        return
+                    }
+                    PlayRequest(
+                        url = signed,
+                        name = entry.name,
+                        subtitleUrl = subtitle,
+                        positionMs = entry.positionMs,
+                        queue = queue
+                    )
+                } else if (server.type == "plex") {
                     PlayRequest(
                         url = entry.url,
                         name = entry.name,

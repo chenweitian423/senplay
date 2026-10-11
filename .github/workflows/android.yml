@@ -56,6 +56,14 @@ jobs:
           echo "code=$CODE" >> "$GITHUB_OUTPUT"
           echo "Android v$NAME ($CODE)"
 
+      - name: Unit tests
+        working-directory: android
+        run: |
+          # The S3 signer is checked against AWS's published aws4 vectors here: a wrong
+          # signature only ever shows up as a bare 403 at runtime, which is not a
+          # failure anyone can debug from the app.
+          gradle :app:testDebugUnitTest --no-daemon
+
       - name: Restore keystore
         env:
           KS_B64: ${{ secrets.APP_KEYSTORE_BASE64 }}

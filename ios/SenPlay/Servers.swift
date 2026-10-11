@@ -3,12 +3,15 @@ import Foundation
 enum ServerError: LocalizedError {
     case badAddress
     case http(Int)
+    /// Provider-supplied reason, when the service bothered to send one.
+    case httpMessage(Int, String)
     case empty
 
     var errorDescription: String? {
         switch self {
         case .badAddress: return "服务器地址无效"
         case .http(let code): return "服务器返回 HTTP \(code)"
+        case .httpMessage(let code, let message): return "\(message)（HTTP \(code)）"
         case .empty: return "服务器未返回内容"
         }
     }

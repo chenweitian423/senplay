@@ -47,6 +47,7 @@ struct ServerBrowserView: View {
     @State private var ftp: FTPClient?
     @State private var plex: PlexClient?
     @State private var plexLibraries: [PlexLibrary] = []
+    @State private var s3: S3Client?
     /// Inside a collection: the box set's id, or nil while listing them.
     @State private var collectionId: String? = nil
     @State private var collectionParent: String? = nil
@@ -362,6 +363,19 @@ struct ServerBrowserView: View {
     }
 
     private func play(_ entry: MediaEntry) {
+        if server.type == "s3" {
+            // The kernel fetches without our headers, so the signature goes into the
+            // URL rather than an Authorization header.
+            guard let client = s3 else { return }
+            let object = S3Object(key: entry.url, size: Int64(entry.size),
+                                  isDirectory: false, modified: nil)
+            guard let url = client.presignedURL(for: object) else {
+                errorText = "无法生成 S3 下载地址"
+                return
+            }
+            pending = PlayRequest(url: url, name: entry.name, queue: siblings)
+            return
+        }
         if server.type == "plex" {
             pending = PlayRequest(
                 url: entry.url,
@@ -498,6 +512,18 @@ struct ServerBrowserView: View {
                                        isDirectory: true, entryId: collection.id)
                         }
                     }
+                }
+            } else if server.type == "s3" {
+                guard let target = S3Target(server: server) else { throw ServerError.badAddress }
+                let client = s3 ?? S3Client(target: target)
+                s3 = client
+                entries = try await client.list(prefix: path.isEmpty ? nil : path).map { object in
+                    MediaEntry(
+                        name: object.name,
+                        url: object.key,
+                        isDirectory: object.isDirectory,
+                        size: Int(object.size)
+                    )
                 }
             } else if server.type == "ftp" {
                 guard let target = FTPTarget(server: server) else { throw ServerError.badAddress }
