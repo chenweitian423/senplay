@@ -31,7 +31,7 @@ class EmbyClient(private val server: ServerConfig) {
             return if (accessToken.isBlank()) base else base + ", Token=\"" + accessToken + "\""
         }
 
-    fun authenticate(): Boolean = io {
+    suspend fun authenticate(): Boolean = io {
         val body = JSONObject()
             .put("Username", server.username)
             .put("Pw", server.password)
@@ -54,9 +54,9 @@ class EmbyClient(private val server: ServerConfig) {
         }
     }
 
-    fun views(): List<MediaEntry> = items(null, "CollectionFolder,Folder,UserView")
+    suspend fun views(): List<MediaEntry> = items(null, "CollectionFolder,Folder,UserView")
 
-    fun items(parentId: String?, includeTypes: String = "Folder,Movie,Episode,Series,Video"): List<MediaEntry> = io {
+    suspend fun items(parentId: String?, includeTypes: String = "Folder,Movie,Episode,Series,Video"): List<MediaEntry> = io {
         val builder = Urls.join(server.address, "/Users/$userId/Items")
             .toHttpUrl()
             .newBuilder()

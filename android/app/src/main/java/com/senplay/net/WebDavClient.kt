@@ -26,7 +26,7 @@ object WebDavClient {
   </d:prop>
 </d:propfind>"""
 
-    fun list(server: ServerConfig, path: String): List<MediaEntry> = io {
+    suspend fun list(server: ServerConfig, path: String): List<MediaEntry> = io {
         val url = Urls.join(server.address, path)
         val request = Request.Builder()
             .url(url)
