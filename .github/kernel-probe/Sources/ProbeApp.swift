@@ -1,22 +1,46 @@
 import KSPlayer
 import SwiftUI
 
-/// Touches the KSPlayer module so that resolving, compiling and linking the whole
-/// graph for `-sdk iphoneos` is exercised end to end. 2.3.4 ships the kernel only
-/// (no KSPlayerUI), which is exactly the shape the shipping player wants: swap the
-/// decode path, keep our own control bar and gesture layer.
+/// Exercises the integration shape, not just the package graph: a `KSPlayerLayer`
+/// driving the render surface while the app keeps its own control bar, which is
+/// how the shipping player will consume the kernel.
 @main
 struct KernelProbeApp: App {
     var body: some Scene {
-        WindowGroup {
-            VStack(spacing: 10) {
-                Text("KSPlayer kernel probe").font(.headline)
-                Text(String(describing: KSOptions.self))
-                    .font(.system(.footnote, design: .monospaced))
-                Text(String(describing: KSPlayerLayer.self))
-                    .font(.system(.footnote, design: .monospaced))
+        WindowGroup { KernelProbeView() }
+    }
+}
+
+struct KernelProbeView: View {
+    @StateObject private var coordinator: KernelCoordinator
+
+    init() {
+        let options = KSOptions()
+        options.isAccurateSeek = true
+        options.hardwareDecode = true
+        options.userAgent = "SenPlay/1.1 (iOS)"
+        let url = URL(string: "https://example.invalid/probe.mp4")!
+        _coordinator = StateObject(wrappedValue: KernelCoordinator(url: url, options: options))
+    }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            KernelSurface(coordinator: coordinator)
+                .frame(height: 200)
+                .background(Color.black)
+
+            Text("state: \(String(describing: coordinator.state))")
+                .font(.system(.footnote, design: .monospaced))
+            Text("audio=\(coordinator.audioTracks().count) subtitle=\(coordinator.subtitleTracks().count)")
+                .font(.system(.footnote, design: .monospaced))
+
+            HStack(spacing: 16) {
+                Button("play") { coordinator.play() }
+                Button("pause") { coordinator.pause() }
+                Button("1x") { coordinator.setRate(1) }
+                Button("2x") { coordinator.setRate(2) }
             }
-            .padding()
         }
+        .padding()
     }
 }
