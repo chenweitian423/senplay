@@ -1,0 +1,69 @@
+{
+  "note": "Address strings as users type them, with what each parser must extract. Read by both the Swift and Kotlin tests.",
+  "s3": [
+    {
+      "address": "bucket@minio.lan:9000/media/films",
+      "username": "ACCESSKEY",
+      "password": "SECRETKEY",
+      "expect": {
+        "endpoint": "http://minio.lan:9000",
+        "bucket": "bucket",
+        "prefix": "media/films",
+        "region": "us-east-1"
+      }
+    },
+    {
+      "address": "https://oss-cn-hangzhou.aliyuncs.com/films",
+      "username": "AK",
+      "password": "SK",
+      "expect": {
+        "endpoint": "https://oss-cn-hangzhou.aliyuncs.com",
+        "bucket": "films",
+        "prefix": "",
+        "region": "cn-hangzhou"
+      }
+    },
+    {
+      "address": "https://s3.us-west-2.amazonaws.com/shows/2024",
+      "username": "AK",
+      "password": "SK",
+      "expect": {
+        "endpoint": "https://s3.us-west-2.amazonaws.com",
+        "bucket": "shows",
+        "prefix": "2024",
+        "region": "us-west-2"
+      }
+    },
+    {
+      "address": "media@r2.example.test/anime",
+      "username": "AK",
+      "password": "SK",
+      "expect": {
+        "endpoint": "http://r2.example.test",
+        "bucket": "media",
+        "prefix": "anime",
+        "region": "us-east-1"
+      }
+    }
+  ],
+  "rejects": [
+    {
+      "kind": "s3",
+      "address": "bucket@host/prefix",
+      "username": "",
+      "password": "SK"
+    },
+    {
+      "kind": "s3",
+      "address": "bucket@host/prefix",
+      "username": "AK",
+      "password": ""
+    },
+    {
+      "kind": "s3",
+      "address": "no-bucket-here",
+      "username": "AK",
+      "password": "SK"
+    }
+  ]
+}

@@ -17,35 +17,54 @@ struct S3Target {
     init?(server: ServerConfig) {
         var raw = server.address.trimmingCharacters(in: .whitespacesAndNewlines)
         let scheme = raw.lowercased().hasPrefix("https") ? "https://" : "http://"
-        for candidate in ["https://", "http://"] where raw.lowercased().hasPrefix(candidate) {
-            raw = String(raw.dropFirst(candidate.count))
+        for prefix in ["https://", "http://"] where raw.lowercased().hasPrefix(prefix) {
+            raw = String(raw.dropFirst(prefix.count))
             break
         }
         guard !raw.isEmpty else { return nil }
 
-        // `bucket@endpoint/prefix` keeps bucket and prefix in one field, and the
-        // credentials reuse the username/password pair every other server type uses.
-        var bucket = ""
-        if let at = raw.firstIndex(of: "@") {
-            bucket = String(raw[raw.startIndex..<at])
+        // `bucket@host/prefix` keeps the bucket and the prefix in the single address
+        // field the server form offers. Without an `@`, the first path segment is the
+        // bucket and the rest is the prefix.
+        var explicitBucket = ""
+        if let at = raw.firstIndex(of: "@"), at != raw.startIndex {
+            explicitBucket = String(raw[raw.startIndex..<at])
             raw = String(raw[raw.index(after: at)...])
         }
-        let parts = raw.components(separatedBy: "/")
-        let host = parts.first ?? ""
+
+        let host = raw.split(separator: "/", maxSplits: 1).first.map(String.init)?
+            .split(separator: "?").first.map(String.init) ?? ""
         guard !host.isEmpty else { return nil }
+
+        let path = raw.contains("/") ? String(raw[raw.index(after: raw.firstIndex(of: "/")!)...]) : ""
+        let trimmedPath = path.split(separator: "?").first.map(String.init) ?? ""
+
+        let bucket: String
+        let directory: String
+        if explicitBucket.isEmpty {
+            bucket = trimmedPath.split(separator: "/").first.map(String.init) ?? ""
+            directory = trimmedPath.contains("/")
+                ? String(trimmedPath[trimmedPath.index(after: trimmedPath.firstIndex(of: "/")!)...])
+                : ""
+        } else {
+            bucket = explicitBucket
+            directory = trimmedPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        }
+
+        guard !server.username.isEmpty, !server.password.isEmpty, !bucket.isEmpty else { return nil }
 
         self.endpoint = scheme + host
         self.accessKey = server.username
         self.secretKey = server.password
-        self.bucket = bucket.isEmpty ? parts.dropFirst().first ?? "" : bucket
-        self.prefix = parts.dropFirst(bucket.isEmpty ? 1 : 0).joined(separator: "/")
+        self.bucket = bucket
+        self.prefix = directory
 
         // Region is not part of the reference app's server form, so it is derived
-        // from the host the way each provider spells it, with a safe default for
-        // MinIO and friends that do not care.
+        // from the host the way each provider spells it, with a `?region=` override
+        // and a default that MinIO and friends accept.
         if let queryStart = raw.firstIndex(of: "?"),
            let region = URLComponents(string: "http://x" + raw[queryStart...])?
-               .queryItems?.first(where: { $0.name == "region" })?.value {
+               .queryItems?.first(where: { $0.name == "region" })?.value, !region.isEmpty {
             self.region = region
         } else if let range = host.range(of: "oss-") {
             self.region = String(host[range.upperBound...].prefix { $0 != "." })
@@ -56,8 +75,6 @@ struct S3Target {
         } else {
             self.region = "us-east-1"
         }
-
-        guard !accessKey.isEmpty, !secretKey.isEmpty, !self.bucket.isEmpty else { return nil }
     }
 }
 

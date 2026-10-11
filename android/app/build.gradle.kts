@@ -114,6 +114,7 @@ dependencies {
     implementation("commons-net:commons-net:3.11.1")
     implementation("com.github.mwiede:jsch:0.2.20")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
