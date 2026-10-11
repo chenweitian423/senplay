@@ -549,16 +549,21 @@ private fun ServerBrowserScreen(
     }
 
     if (menuOpen) {
+        // This menu is outside the browser's scope, so the flags are read here
+        // rather than reached for — same reason the strip list below does it.
+        val menuDisplay = ListDisplay(LibraryStore.get(LocalContext.current))
         AlertDialog(
             onDismissRequest = { menuOpen = false },
-            title = { Text("浏览设置") },
+            title = {
+                Text(
+                    if (menuDisplay.showTitleCount) "浏览设置（${visible.size} 项）"
+                    else "浏览设置"
+                )
+            },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("板块", style = MaterialTheme.typography.labelMedium)
-                    // This menu sits outside the browser's scope, so the flags are
-                    // read here rather than reached for.
-                    ListDisplay(LibraryStore.get(LocalContext.current))
-                        .visibleStrips.forEach { option ->
+                    menuDisplay.visibleStrips.forEach { option ->
                         TextButton(onClick = {
                             strip = option
                             stack = emptyList()
@@ -600,7 +605,10 @@ private class ListDisplay(store: LibraryStore) {
     val showSize = store.prefBool("list.showSize", true)
     val showDuration = store.prefBool("list.showDuration", true)
     val showProgress = store.prefBool("list.showProgress", true)
-    val showCount = store.prefBool("list.showCount", true)
+    /** Title bar only, and off by default: "标题栏显示文件数量". */
+    val showTitleCount = store.prefBool("list.showCount", false)
+    /** Item counts in the list, from the library group. */
+    val showItemCount = store.prefBool("library.showCount", true)
     val ellipsis = store.prefBool("list.ellipsis", false)
 
     // Poster marks: what the reference app puts on the artwork rather than in the
@@ -635,7 +643,7 @@ private class ListDisplay(store: LibraryStore) {
 private fun rowDetail(entry: MediaEntry, display: ListDisplay): String? {
     val parts = mutableListOf<String>()
     if (entry.isDirectory) {
-        if (display.showCount && entry.childCount > 0) parts += "${entry.childCount} 项"
+        if (display.showItemCount && entry.childCount > 0) parts += "${entry.childCount} 项"
     } else {
         if (display.showSize && entry.size > 0) {
             parts += android.text.format.Formatter.formatFileSize(null, entry.size)

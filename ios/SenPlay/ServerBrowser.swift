@@ -14,7 +14,10 @@ private struct ListDisplay {
     var showDuration = true
     var showProgress = true
     var showFolderTime = true
-    var showCount = true
+    /// Title bar only, and off by default: the reference app's "标题栏显示文件数量".
+    var showTitleCount = false
+    /// Item counts on the artwork, from the library group.
+    var showItemCount = true
     var rounded = true
     var ellipsis = false
     var fullNameOnMenu = true
@@ -33,7 +36,8 @@ private struct ListDisplay {
         showDuration = defaults.object(forKey: "pref.list.showDuration") as? Bool ?? true
         showProgress = defaults.object(forKey: "pref.list.showProgress") as? Bool ?? true
         showFolderTime = defaults.object(forKey: "pref.list.showFolderTime") as? Bool ?? true
-        showCount = defaults.object(forKey: "pref.list.showCount") as? Bool ?? true
+        showTitleCount = defaults.object(forKey: "pref.list.showCount") as? Bool ?? false
+        showItemCount = defaults.object(forKey: "pref.library.showCount") as? Bool ?? true
         rounded = defaults.object(forKey: "pref.list.rounded") as? Bool ?? true
         ellipsis = defaults.object(forKey: "pref.list.ellipsis") as? Bool ?? false
         fullNameOnMenu = defaults.object(forKey: "pref.list.fullNameOnMenu") as? Bool ?? true
@@ -247,7 +251,9 @@ struct ServerBrowserView: View {
     }
 
     private var title: String {
-        server.name.isEmpty ? server.address : server.name
+        let base = server.name.isEmpty ? server.address : server.name
+        guard display.showTitleCount else { return base }
+        return "\(base)（\(visibleEntries.count)）"
     }
 
     private var visibleEntries: [MediaEntry] {
@@ -416,7 +422,7 @@ struct ServerBrowserView: View {
     private func rowDetail(_ entry: MediaEntry) -> String? {
         var parts: [String] = []
         if entry.isDirectory {
-            if display.showCount, entry.childCount > 0 {
+            if display.showItemCount, entry.childCount > 0 {
                 parts.append("\(entry.childCount) 项")
             }
         } else {
