@@ -46,6 +46,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -202,6 +204,16 @@ private const val P_AUTO_FULLSCREEN = "ui.autoFullScreen"
 private const val P_DANMAKU_KEYWORDS = "danmaku.keywords"
 private const val P_DANMAKU_BOTTOM_FLOAT = "danmaku.bottomToFloat"
 private const val P_SCREENSHOT_TO_CLIPBOARD = "video.screenshotToClipboard"
+
+/**
+ * The same three modes the iOS side offers, mapped onto the view's own resize modes
+ * rather than a scale transform of our own.
+ */
+private enum class AspectMode(val title: String, val resizeMode: Int) {
+    FIT("适应屏幕", androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT),
+    FILL("裁剪全屏", androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM),
+    STRETCH("拉伸铺满", androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL)
+}
 private const val P_REMEMBER_SPEED = "play.rememberSpeed"
 private const val P_LAST_SPEED = "play.lastSpeed"
 
@@ -226,6 +238,8 @@ fun PlayerScreen(
 
     var speedMenuOpen by remember { mutableStateOf(false) }
     var moreMenuOpen by remember { mutableStateOf(false) }
+    var aspectMenuOpen by remember { mutableStateOf(false) }
+    var aspectMode by remember { mutableStateOf(AspectMode.FIT) }
 
     var controlsVisible by remember { mutableStateOf(true) }
     var isPlaying by remember { mutableStateOf(true) }
@@ -650,11 +664,32 @@ fun PlayerScreen(
             }
     ) {
         var playerView by remember { mutableStateOf<PlayerView?>(null) }
+        if (aspectMenuOpen) {
+            AlertDialog(
+                onDismissRequest = { aspectMenuOpen = false },
+                title = { Text("画面比例") },
+                text = {
+                    Column {
+                        AspectMode.values().forEach { mode ->
+                            TextButton(onClick = {
+                                aspectMode = mode
+                                aspectMenuOpen = false
+                            }) {
+                                Text((if (aspectMode == mode) "✓ " else "") + mode.title)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {}
+            )
+        }
+
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     playerView = this
+                    resizeMode = aspectMode.resizeMode
                     this.player = player
                     useController = false
                     setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
@@ -729,9 +764,21 @@ fun PlayerScreen(
                             Icon(Icons.Filled.MoreVert, contentDescription = "更多", tint = Color.White)
                         }
                         DropdownMenu(expanded = moreMenuOpen, onDismissRequest = { moreMenuOpen = false }) {
-                            DropdownMenuItem(text = { Text("截图") }, onClick = { moreMenuOpen = false })
-                            DropdownMenuItem(text = { Text("媒体信息") }, onClick = { moreMenuOpen = false })
-                            DropdownMenuItem(text = { Text("画面比例") }, onClick = { moreMenuOpen = false })
+                            DropdownMenuItem(
+                                text = { Text("截图") },
+                                onClick = { moreMenuOpen = false; captureFrame(playerView) }
+                            )
+                            // Both of these used to just close the menu. The info panel
+                            // reuses the counters the service already collects; the
+                            // aspect picker maps onto the view's own resize modes.
+                            DropdownMenuItem(
+                                text = { Text(if (showOSD) "隐藏媒体信息" else "媒体信息") },
+                                onClick = { moreMenuOpen = false; showOSD = !showOSD }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("画面比例") },
+                                onClick = { moreMenuOpen = false; aspectMenuOpen = true }
+                            )
                             DropdownMenuItem(
                                 text = { Text(if (showOSD) "隐藏状态信息" else "显示状态信息") },
                                 onClick = {
