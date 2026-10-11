@@ -33,7 +33,7 @@
 | SMB | **仅 Android** | 见下节 |
 | SFTP | **仅 Android** | 见下节 |
 | DLNA / UPnP | **仅 Android** | 见下节 |
-| S3 对象存储 | 完成 | 见下节；这也是网盘类需求的落点 |
+| S3 对象存储 | 完成 | 签名用 presigned URL；这也是网盘类需求的落点。另有 `S3DataSource`（每次请求现签，不受有效期限制）已实现但**未接线**，原因见 `PREF-AUDIT.md` 的断链一节 |
 | 在线字幕搜索 | **未做** | 见下节 |
 | IPTV M3U / M3U8 | 完成 | EXTINF 属性、分组、搜索、播放列队 |
 | 局域网发现 | 完成 | mDNS（`_http` / `_https` / `_webdav` / `_smb`），双端 |
