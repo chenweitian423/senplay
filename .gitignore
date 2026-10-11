@@ -18,3 +18,7 @@ ios/*.xcworkspace
 *.keystore
 *.p12
 local.properties
+
+# --- kernel probe scaffold ---
+.github/kernel-probe/build
+.github/kernel-probe/*.xcodeproj

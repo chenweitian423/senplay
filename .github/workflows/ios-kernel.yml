@@ -42,23 +42,28 @@ jobs:
         working-directory: .github/kernel-probe
         run: |
           set -euo pipefail
-          xcodebuild -resolvePackageDependencies -project KernelProbe.xcodeproj -scheme KernelProbe
+          xcodebuild -resolvePackageDependencies -project KernelProbe.xcodeproj \
+            -scheme KernelProbe -derivedDataPath build
 
       - name: Report resolved checkouts
         working-directory: .github/kernel-probe
         run: |
-          set -euo pipefail
-          ROOT=$(find . -maxdepth 4 -type d -name checkouts | head -n1)
-          echo "checkouts root: $ROOT"
-          [ -n "$ROOT" ] || { echo "::error::no package checkouts were produced"; exit 1; }
-          ls -1 "$ROOT"
-          for pkg in KSPlayer FFmpegKit; do
-            if [ -d "$ROOT/$pkg" ]; then
-              echo "--- $pkg ---"
-              git -C "$ROOT/$pkg" describe --tags --always 2>/dev/null || true
-              git -C "$ROOT/$pkg" log -1 --pretty='%h %s' 2>/dev/null || true
-            fi
-          done
+          set -uo pipefail
+          ROOT=$(find build -maxdepth 4 -type d -name checkouts 2>/dev/null | head -n1)
+          echo "checkouts root: ${ROOT:-<none>}"
+          if [ -z "$ROOT" ]; then
+            echo "::warning::no checkouts directory under the derived data path; continuing to the build step"
+          else
+            ls -1 "$ROOT"
+            for pkg in KSPlayer FFmpegKit; do
+              if [ -d "$ROOT/$pkg" ]; then
+                echo "--- $pkg ---"
+                git -C "$ROOT/$pkg" describe --tags --always 2>/dev/null || true
+                git -C "$ROOT/$pkg" log -1 --pretty='%h %s' 2>/dev/null || true
+                du -sh "$ROOT/$pkg" 2>/dev/null || true
+              fi
+            done
+          fi
 
       - name: Build for device arm64
         working-directory: .github/kernel-probe

@@ -400,16 +400,27 @@ kMainWindowSizeHeight = 646      kMainWindowSizeWidth = 1087
 
 ---
 
-## 9. 与当前实现的差距
+## 9. 实现进度
 
-现有仓库（iOS 6 文件 1,036 行 / Android 12 文件 1,512 行）已覆盖：deep link 四契约、WebDAV + Emby/Jellyfin 浏览直链、本地与网络播放、外挂字幕、断点续播、URL 列表与历史、深色播放器。
+### 1.1.0 已落地（本规格 P0 + P1）
 
-按本规格**待补的 P0/P1**：
+| 项 | 落地位置 |
+|---|---|
+| 十个偏好分组，含列表 16 项 / 媒体库 13 项开关 | `ios/SenPlay/Preferences.swift`、`android/…/ui/SettingsScreen.kt` |
+| 播放器手势：双击三分区、左右垂直亮度/音量、水平 seek、捏合缩放、长按倍速 | `ios/SenPlay/PlayerScreen.swift`、`android/…/player/PlayerActivity.kt` |
+| 控制栏全元素：关闭 / 切换媒体 / 时间 / 进度条（圆点可选）/ 倍速 / 字幕 / 音轨 / 音量 / 更多 | 同上（两端的控制栏都是自绘，不接管平台的默认控制器） |
+| `accurateSeek`、`timeMode`、`autoHideSeconds`、`fastSeekButtons`、`screenshotButton` | 播放器与偏好面板读同一组键 |
+| 双端键串对齐 | iOS `@AppStorage` 与 Android `LibraryStore.prefXxx` 使用 **相同 key**，可直接互通 |
 
-1. 设置窗口（10 tab，当前 Android 仅 `SettingsScreen.kt` 91 行的占位）
-2. 播放器手势体系（当前无）
-3. 播放器控制栏完整元素（关闭/上一集/下一集/音量/字幕/音轨/音频/更多）
-4. 键盘/遥控命令集（`Space ← → ↑ ↓ + - 0 F I`）
-5. 列表显示开关项（16 项）与媒体库显示开关项（13 项）
-6. OSD（码率/帧率/时间）、`accurateSeek`、`rememberZoomSize`、`rememberAudioTrack`、`rememberSubtitleTrack`
-7. 媒体库 tab 的 Emby/Jellyfin/Plex/fnOS 四协议枚举入口
+iOS 侧为此把渲染面从 `VideoPlayer` 换成裸 `AVPlayerLayer` 宿主（`PlayerSurface`），因为前者会强制安装系统控制栏。
+
+### 仍待推进
+
+1. 键盘/遥控命令集（`Space ← → ↑ ↓ + - 0 F I`）——iPadOS 与遥控器场景
+2. OSD 叠层（实时码率 / 帧率 / 播放时间）——依赖内核上报的统计量
+3. 媒体库 tab 的 Plex / fnOS 协议枚举入口（当前 Emby / Jellyfin / 飞牛已通）
+4. 弹幕协议层（UI 与偏好已就位，搜索接口与渲染未接）
+5. 投屏（DLNA / AirPlay）、SMB / FTP / SFTP、网盘四家
+6. **内核**：`.github/kernel-probe` 正在验证 KSPlayer + FFmpegKit 的设备编译链路；
+   一旦通过，播放器只换解码路径，控制栏与手势层不动（KSPlayer 2.3.4 只发布内核、不含 UI，
+   正好契合这一分工）

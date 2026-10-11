@@ -24,7 +24,7 @@ targets:
       - path: Sources
     dependencies:
       - package: KSPlayer
-        product: KSPlayerUI
+        product: KSPlayer
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.senplay.kernelprobe
