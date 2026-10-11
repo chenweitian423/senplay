@@ -677,28 +677,6 @@ private struct DanmakuPrefs: View {
     }
 }
 
-struct DanmakuEndpoint: Identifiable, Codable, Equatable {
-    var id: String = UUID().uuidString
-    var name: String
-    var url: String
-
-    private static let key = "danmaku.endpoints.v1"
-
-    static func load() -> [DanmakuEndpoint] {
-        guard let data = UserDefaults.standard.data(forKey: key),
-              let list = try? JSONDecoder().decode([DanmakuEndpoint].self, from: data) else {
-            return (1...3).map { DanmakuEndpoint(name: "API-\($0)", url: "") }
-        }
-        return list
-    }
-
-    static func save(_ list: [DanmakuEndpoint]) {
-        if let data = try? JSONEncoder().encode(list) {
-            UserDefaults.standard.set(data, forKey: key)
-        }
-    }
-}
-
 // MARK: - 恢复默认
 
 private struct RestoreDefaults: View {

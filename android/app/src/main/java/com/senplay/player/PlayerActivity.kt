@@ -78,6 +78,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import com.senplay.core.Http
+import com.senplay.core.DanmakuItem
 import com.senplay.core.LibraryStore
 import com.senplay.deeplink.SchemeRouter
 import com.senplay.ui.SenPlayTheme
@@ -170,6 +171,11 @@ private const val P_AUTO_NEXT = "play.autoNext"
 private const val P_SKIP_INTRO = "play.skipIntroSeconds"
 private const val P_SKIP_OUTRO = "play.skipOutroSeconds"
 private const val P_NEXT_COUNTDOWN = "play.autoNextCountdown"
+private const val P_DANMAKU_ENABLED = "danmaku.enabled"
+private const val P_DANMAKU_SIZE = "danmaku.size"
+private const val P_DANMAKU_SPEED = "danmaku.speed"
+private const val P_DANMAKU_AREA = "danmaku.area"
+private const val P_DANMAKU_SKIP_SHORT = "danmaku.skipShort"
 
 private enum class DragKind { NONE, SEEK, BRIGHTNESS, VOLUME }
 
@@ -205,6 +211,7 @@ fun PlayerScreen(
     var didSkipOutro by remember { mutableStateOf(false) }
     var upNext by remember { mutableStateOf<Pair<String, String>?>(null) }
     var inPip by remember { mutableStateOf(activity?.isInPictureInPictureMode == true) }
+    var danmaku by remember { mutableStateOf<List<DanmakuItem>>(emptyList()) }
     var countdown by remember { mutableStateOf(0) }
 
     val autoHideSeconds = remember { store.prefInt(P_HIDE_AFTER, 3) }
@@ -225,6 +232,11 @@ fun PlayerScreen(
     val skipIntroSeconds = remember { store.prefInt(P_SKIP_INTRO, 0) }
     val skipOutroSeconds = remember { store.prefInt(P_SKIP_OUTRO, 0) }
     val nextCountdown = remember { store.prefInt(P_NEXT_COUNTDOWN, 5) }
+    val danmakuEnabled = remember { store.prefBool(P_DANMAKU_ENABLED, true) }
+    val danmakuSize = remember { store.prefFloat(P_DANMAKU_SIZE, 25f).toDouble() }
+    val danmakuSpeed = remember { store.prefFloat(P_DANMAKU_SPEED, 0.5f).toDouble() }
+    val danmakuArea = remember { store.prefFloat(P_DANMAKU_AREA, 0.15f).toDouble() }
+    val danmakuSkipShort = remember { store.prefBool(P_DANMAKU_SKIP_SHORT, true) }
 
     val player = remember {
         val dataSource = DefaultDataSource.Factory(
@@ -287,6 +299,13 @@ fun PlayerScreen(
         if (countdown == 0) {
             upNext?.let { advanceToNext(it) }
         }
+    }
+
+    LaunchedEffect(url) {
+        if (!danmakuEnabled) return@LaunchedEffect
+        val endpoint = com.senplay.core.danmakuEndpoints(store).firstOrNull() ?: return@LaunchedEffect
+        val keyword = url.substringAfterLast('/').substringBeforeLast('.')
+        danmaku = com.senplay.core.DanmakuLoader.fetch(keyword, endpoint)
     }
 
     LaunchedEffect(player) {
@@ -460,6 +479,19 @@ fun PlayerScreen(
                 }
             }
         )
+
+        if (danmakuEnabled && danmaku.isNotEmpty() &&
+            !(danmakuSkipShort && duration in 1..599_999L)
+        ) {
+            com.senplay.ui.DanmakuOverlay(
+                items = danmaku,
+                currentTime = position / 1000.0,
+                fontSize = danmakuSize,
+                speed = danmakuSpeed,
+                area = danmakuArea,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
 
         hud?.takeIf { it.isNotEmpty() }?.let { text ->
             Box(

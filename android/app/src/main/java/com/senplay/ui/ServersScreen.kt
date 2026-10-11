@@ -12,6 +12,24 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material3.AlertDialog
@@ -132,7 +150,6 @@ private fun ServerBrowserScreen(
     onBack: () -> Unit,
     onPlay: (PlayRequest) -> Unit
 ) {
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var entries by remember { mutableStateOf<List<MediaEntry>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
@@ -142,13 +159,26 @@ private fun ServerBrowserScreen(
     var stack by remember { mutableStateOf(listOf<Pair<String, String?>>()) }
     var emby by remember { mutableStateOf<EmbyClient?>(null) }
 
-    LaunchedEffect(server, path, parentId) {
+    var strip by remember { mutableStateOf(Strip.FILES) }
+    var sortBy by remember { mutableStateOf(EmbyClient.SortBy.NAME) }
+    var ascending by remember { mutableStateOf(true) }
+    var grid by remember { mutableStateOf(true) }
+    var search by remember { mutableStateOf("") }
+    var menuOpen by remember { mutableStateOf(false) }
+
+    LaunchedEffect(server, path, parentId, strip, sortBy, ascending) {
         loading = true
         error = null
         runCatching {
             if (server.isEmbyLike) {
                 val client = emby ?: EmbyClient(server).also { it.authenticate(); emby = it }
-                if (parentId == null) client.views() else client.items(parentId)
+                when (strip) {
+                    Strip.FILES ->
+                        if (parentId == null) client.views()
+                        else client.items(parentId, sortBy = sortBy, ascending = ascending)
+                    Strip.RESUME -> client.resume()
+                    Strip.LATEST -> client.latest()
+                }
             } else {
                 WebDavClient.list(server, path)
             }
@@ -157,12 +187,20 @@ private fun ServerBrowserScreen(
         loading = false
     }
 
+    val query = search.trim()
+    val visible = if (query.isEmpty()) {
+        entries
+    } else {
+        entries.filter { it.name.contains(query, ignoreCase = true) }
+    }
+
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = 8.dp, end = 8.dp, top = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             TextButton(onClick = {
                 val previous = stack.lastOrNull()
@@ -177,74 +215,229 @@ private fun ServerBrowserScreen(
             Text(
                 server.name.ifBlank { server.address },
                 style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.padding(top = 12.dp)
+                maxLines = 1,
+                modifier = Modifier.weight(1f)
             )
-            Text("", modifier = Modifier.padding(8.dp))
-        }
-
-        if (loading) {
-            Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.Center) {
-                CircularProgressIndicator()
+            if (server.isEmbyLike) {
+                TextButton(onClick = { menuOpen = true }) { Text(strip.title) }
+            }
+            IconButton(onClick = { grid = !grid }) {
+                Icon(
+                    if (grid) Icons.Filled.List else Icons.Filled.GridView,
+                    contentDescription = "切换布局"
+                )
             }
         }
+
+        OutlinedTextField(
+            value = search,
+            onValueChange = { search = it },
+            label = { Text("搜索") },
+            singleLine = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 4.dp)
+        )
 
         error?.let {
             Text(
                 "错误：$it",
                 style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+        }
+
+        if (loading && entries.isEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                Text("载入中…", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+
+        if (!loading && visible.isEmpty()) {
+            Text(
+                if (server.isEmbyLike) "这个位置没有内容。" else "空目录。",
+                style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(16.dp)
             )
         }
 
-        LazyColumn(modifier = Modifier.fillMaxWidth()) {
-            items(entries, key = { it.url + it.name }) { entry ->
-                ListItem(
-                    headlineContent = { Text(entry.name, maxLines = 2) },
-                    supportingContent = {
-                        if (!entry.isDirectory) {
-                            Text(if (entry.size > 0) (entry.size / 1024 / 1024).toString() + " MB" else "媒体文件")
-                        }
-                    },
-                    leadingContent = {
-                        Icon(
-                            if (entry.isDirectory) Icons.Filled.Folder else Icons.Filled.InsertDriveFile,
-                            contentDescription = null
-                        )
-                    },
-                    modifier = Modifier.clickable {
-                        if (entry.isDirectory) {
-                            stack = stack + (path to parentId)
-                            if (server.isEmbyLike) {
-                                parentId = entry.entryId
-                            } else {
-                                path = entry.url
-                            }
-                        } else {
-                            // Siblings of this folder, so playback can continue on its own.
-                            val queue = entries.filter { !it.isDirectory }.map { candidate ->
-                                val candidateUrl = if (server.isEmbyLike) {
-                                    emby?.streamUrl(candidate) ?: candidate.url
-                                } else {
-                                    candidate.url
-                                }
-                                candidateUrl to candidate.name
-                            }
-                            val request = if (server.isEmbyLike) {
-                                val client = emby
-                                PlayRequest(
-                                    url = client?.streamUrl(entry) ?: entry.url,
-                                    name = entry.name,
-                                    headers = client?.mediaHeaders() ?: emptyMap(),
-                                    queue = queue
-                                )
-                            } else {
-                                PlayRequest(entry.url, entry.name, queue = queue)
-                            }
-                            onPlay(request)
+        val queue = visible.filter { !it.isDirectory }.map { entry ->
+            val url = if (server.isEmbyLike) {
+                (emby ?: EmbyClient(server)).streamUrl(entry)
+            } else {
+                entry.url
+            }
+            url to entry.name
+        }
+
+        fun open(entry: MediaEntry) {
+            val navigable = stack.isEmpty() || !server.isEmbyLike || strip == Strip.FILES
+            if (server.isEmbyLike && strip == Strip.FILES && entry.isDirectory) {
+                stack = stack + (path to parentId)
+                parentId = entry.entryId
+            } else if (!server.isEmbyLike && entry.isDirectory) {
+                stack = stack + (path to parentId)
+                path = entry.url
+            } else {
+                val request = if (server.isEmbyLike) {
+                    val client = emby ?: EmbyClient(server)
+                    PlayRequest(
+                        url = client.streamUrl(entry),
+                        name = entry.name,
+                        positionMs = entry.positionMs,
+                        headers = client.mediaHeaders(),
+                        queue = queue
+                    )
+                } else {
+                    PlayRequest(
+                        url = entry.url,
+                        name = entry.name,
+                        positionMs = entry.positionMs,
+                        queue = queue
+                    )
+                }
+                onPlay(request)
+            }
+            @Suppress("UNUSED_EXPRESSION") navigable
+        }
+
+        if (grid) {
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 118.dp),
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(10.dp)
+            ) {
+                gridItems(visible, key = { it.url + it.name }) { entry ->
+                    PosterCell(entry) { open(entry) }
+                }
+            }
+        } else {
+            LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                items(visible, key = { it.url + it.name }) { entry ->
+                    ListItem(
+                        headlineContent = { Text(entry.name, maxLines = 2) },
+                        supportingContent = entry.subtitle.ifBlank { null }?.let { text ->
+                            { Text(text, style = MaterialTheme.typography.bodySmall) }
+                        },
+                        leadingContent = {
+                            Icon(
+                                if (entry.isDirectory) Icons.Filled.Folder else Icons.Filled.InsertDriveFile,
+                                contentDescription = null
+                            )
+                        },
+                        modifier = Modifier.clickable { open(entry) }
+                    )
+                }
+            }
+        }
+    }
+
+    if (menuOpen) {
+        AlertDialog(
+            onDismissRequest = { menuOpen = false },
+            title = { Text("浏览设置") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("板块", style = MaterialTheme.typography.labelMedium)
+                    Strip.values().forEach { option ->
+                        TextButton(onClick = {
+                            strip = option
+                            stack = emptyList()
+                            path = ""
+                            parentId = null
+                        }) {
+                            Text(
+                                (if (strip == option) "✓ " else "") + option.title,
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
                     }
+                    Text("排序", style = MaterialTheme.typography.labelMedium)
+                    EmbyClient.SortBy.values().forEach { option ->
+                        TextButton(onClick = { sortBy = option }) {
+                            Text(
+                                (if (sortBy == option) "✓ " else "") + option.title,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    TextButton(onClick = { ascending = !ascending }) {
+                        Text(if (ascending) "✓ 升序" else "✓ 降序")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { menuOpen = false }) { Text("完成") }
+            }
+        )
+    }
+}
+
+private enum class Strip(val title: String) {
+    FILES("文件"),
+    RESUME("继续观看"),
+    LATEST("最近添加")
+}
+
+@Composable
+private fun PosterCell(entry: MediaEntry, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .clickable { onClick() }
+            .padding(bottom = 6.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(168.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            val url = entry.imageUrl
+            if (!url.isNullOrBlank()) {
+                AsyncImage(
+                    model = url,
+                    contentDescription = entry.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Icon(
+                    if (entry.isDirectory) Icons.Filled.Folder else Icons.Filled.Movie,
+                    contentDescription = null
                 )
             }
+            if (entry.progress > 0f) {
+                LinearProgressIndicator(
+                    progress = { entry.progress },
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .height(3.dp)
+                )
+            }
+        }
+        Text(
+            entry.name,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 2,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+        if (entry.subtitle.isNotBlank()) {
+            Text(
+                entry.subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1
+            )
         }
     }
 }

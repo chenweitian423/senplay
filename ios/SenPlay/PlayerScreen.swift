@@ -391,6 +391,11 @@ struct PlayerScreen: View {
     @AppStorage(PrefKey.skipIntroSeconds) private var skipIntroSeconds = 0
     @AppStorage(PrefKey.skipOutroSeconds) private var skipOutroSeconds = 0
     @AppStorage(PrefKey.autoNextCountdown) private var autoNextCountdown = 5
+    @AppStorage(PrefKey.danmakuEnabled) private var danmakuEnabled = true
+    @AppStorage(PrefKey.danmakuSize) private var danmakuSize = 25.0
+    @AppStorage(PrefKey.danmakuSpeed) private var danmakuSpeed = 0.5
+    @AppStorage(PrefKey.danmakuArea) private var danmakuArea = 0.15
+    @AppStorage(PrefKey.danmakuSkipShort) private var danmakuSkipShort = true
 
     @StateObject private var subtitles = SubtitleController()
     @State private var kernel: KernelPlayer?
@@ -418,6 +423,7 @@ struct PlayerScreen: View {
     @State private var didSkipIntro = false
     @State private var didSkipOutro = false
     @State private var upNext: QueueItem?
+    @State private var danmakuItems: [DanmakuItem] = []
     @State private var countdown: Int = 0
 
     private let speeds: [Float] = [0.5, 0.75, 1, 1.25, 1.5, 2, 3]
@@ -444,6 +450,15 @@ struct PlayerScreen: View {
                     KernelSurface(player: kernel)
                         .ignoresSafeArea()
                         .scaleEffect(zoom)
+                }
+
+                if danmakuEnabled, !danmakuItems.isEmpty {
+                    DanmakuOverlay(items: danmakuItems,
+                                   currentTime: currentTime,
+                                   fontSize: danmakuSize,
+                                   speed: danmakuSpeed,
+                                   area: danmakuArea)
+                        .ignoresSafeArea()
                 }
 
                 if !subtitles.currentText.isEmpty {
@@ -1186,6 +1201,8 @@ struct PlayerScreen: View {
             Task { await subtitles.load(urlString: subtitleURL) }
         }
 
+        loadDanmaku()
+
         NowPlaying.shared.activate(
             title: request.name,
             duration: 0,
@@ -1196,6 +1213,26 @@ struct PlayerScreen: View {
         )
 
         scheduleHide()
+    }
+
+    /// Pulls comments for this title from the first configured endpoint. Skipped for
+    /// short clips when the preference says so, mirroring the reference behaviour.
+    private func loadDanmaku() {
+        guard danmakuEnabled else { return }
+        let endpoints = DanmakuEndpoint.load().filter { !$0.url.isEmpty }
+        guard let endpoint = endpoints.first else { return }
+
+        Task {
+            let keyword = request.name
+                .replacingOccurrences(of: "\\.(mp4|mkv|avi|mov|ts|m3u8|flv|webm|rmvb|wmv)$",
+                                      with: "", options: [.regularExpression, .caseInsensitive])
+            let loader = DanmakuLoader()
+            let items = await loader.fetch(keyword: keyword, base: endpoint.url)
+            await MainActor.run {
+                if danmakuSkipShort, duration > 0, duration < 600 { return }
+                danmakuItems = items
+            }
+        }
     }
 
     private func finish() {
