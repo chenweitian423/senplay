@@ -1,0 +1,8 @@
+{
+  "versionCode": 1,
+  "versionName": "1.0.0",
+  "sha256": "cfb4128ec7e24ebc7d5ef8fc56239644ef7e0b0e2563afec119554e5dab60738",
+  "size": 13325493,
+  "notes": "首个构建：URL Scheme 深链 / WebDAV 与 Emby 浏览 / 本地与网络播放 / 外挂字幕 / 断点续播",
+  "apkName": "senplay-1.0.0-release.apk"
+}
