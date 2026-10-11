@@ -57,6 +57,7 @@ import com.senplay.core.MediaEntry
 import com.senplay.core.PlayRequest
 import com.senplay.core.ServerConfig
 import com.senplay.net.EmbyClient
+import com.senplay.net.PlexClient
 import com.senplay.net.SmbTarget
 import com.senplay.net.WebDavClient
 import com.senplay.net.listFtpDirectory
@@ -64,7 +65,7 @@ import com.senplay.net.listSmbDirectory
 import kotlinx.coroutines.launch
 import java.util.UUID
 
-private val SERVER_TYPES = listOf("webdav", "emby", "jellyfin", "feiniu", "smb", "ftp")
+private val SERVER_TYPES = listOf("webdav", "emby", "jellyfin", "feiniu", "plex", "smb", "ftp")
 
 @Composable
 fun ServersScreen(store: LibraryStore, onPlay: (PlayRequest) -> Unit) {
@@ -161,6 +162,7 @@ private fun ServerBrowserScreen(
     var parentId by remember { mutableStateOf<String?>(null) }
     var stack by remember { mutableStateOf(listOf<Pair<String, String?>>()) }
     var emby by remember { mutableStateOf<EmbyClient?>(null) }
+    var plex by remember { mutableStateOf<PlexClient?>(null) }
 
     var strip by remember { mutableStateOf(Strip.FILES) }
     var sortBy by remember { mutableStateOf(EmbyClient.SortBy.NAME) }
@@ -199,6 +201,28 @@ private fun ServerBrowserScreen(
                         size = entry.size
                     )
                 }.sortedWith(compareByDescending<MediaEntry> { it.isDirectory }.thenBy { it.name })
+            } else if (server.type == "plex") {
+                val client = plex ?: PlexClient(server).also { plex = it }
+                val libraryId = if (path.isBlank()) client.libraries().firstOrNull()?.id ?: "" else path
+                val items = when (strip) {
+                    Strip.RESUME -> client.onDeck()
+                    Strip.LATEST -> client.recentlyAdded()
+                    else -> client.items(libraryId)
+                }
+                items.map { item ->
+                    MediaEntry(
+                        name = item.title,
+                        url = client.streamUrl(item) ?: "",
+                        isDirectory = false,
+                        size = item.partSize,
+                        entryId = item.id,
+                        durationTicks = item.durationMs * 10_000,
+                        played = item.isPlayed,
+                        positionMs = item.viewOffsetMs,
+                        year = item.year,
+                        imageUrl = client.artworkUrl(item)
+                    )
+                }
             } else if (server.type == "ftp") {
                 listFtpDirectory(server, path).map { entry ->
                     MediaEntry(
@@ -349,7 +373,16 @@ private fun ServerBrowserScreen(
                 }
             } else {
                 val subtitle = matchSubtitle(entry)
-                val request = if (server.isEmbyLike) {
+                val request = if (server.type == "plex") {
+                    PlayRequest(
+                        url = entry.url,
+                        name = entry.name,
+                        subtitleUrl = subtitle,
+                        positionMs = entry.positionMs,
+                        headers = plex?.mediaHeaders() ?: emptyMap(),
+                        queue = queue
+                    )
+                } else if (server.isEmbyLike) {
                     val client = emby ?: EmbyClient(server)
                     PlayRequest(
                         url = client.streamUrl(entry),
