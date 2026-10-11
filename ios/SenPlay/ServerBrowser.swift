@@ -18,6 +18,8 @@ private struct ListDisplay {
     var showTitleCount = false
     /// Item counts on the artwork, from the library group.
     var showItemCount = true
+    /// "显示剩余播放数量" — a count of remaining items, not a duration.
+    var showRemainingCount = true
     var rounded = true
     var ellipsis = false
     var fullNameOnMenu = true
@@ -38,6 +40,8 @@ private struct ListDisplay {
         showFolderTime = defaults.object(forKey: "pref.list.showFolderTime") as? Bool ?? true
         showTitleCount = defaults.object(forKey: "pref.list.showCount") as? Bool ?? false
         showItemCount = defaults.object(forKey: "pref.library.showCount") as? Bool ?? true
+        showFolderTime = defaults.object(forKey: "pref.list.showFolderTime") as? Bool ?? true
+        showRemainingCount = defaults.object(forKey: "pref.library.showRemaining") as? Bool ?? true
         rounded = defaults.object(forKey: "pref.list.rounded") as? Bool ?? true
         ellipsis = defaults.object(forKey: "pref.list.ellipsis") as? Bool ?? false
         fullNameOnMenu = defaults.object(forKey: "pref.list.fullNameOnMenu") as? Bool ?? true
@@ -319,10 +323,11 @@ struct ServerBrowserView: View {
         if display.showRating, let rating = entry.rating, rating > 0 {
             parts.append(String(format: "★ %.1f", rating))
         }
-        if display.showRemaining, entry.durationMs > 0, entry.positionMs > 0,
-           entry.durationMs > entry.positionMs {
-            let left = (entry.durationMs - entry.positionMs) / 1000
-            parts.append("剩余 " + Self.clock(left))
+        if display.showRemainingCount, entry.unplayedCount > 0 {
+            parts.append("剩余 \(entry.unplayedCount) 集")
+        }
+        if display.showFolderTime, entry.isDirectory, let modified = entry.modifiedAt {
+            parts.append(Self.shortDate(modified))
         }
         if display.showMediaInfo, !entry.isDirectory, entry.size > 0 {
             parts.append(ByteCountFormatter.string(fromByteCount: Int64(entry.size),
@@ -435,6 +440,17 @@ struct ServerBrowserView: View {
             }
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private static let shortDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
+    private static func shortDate(_ date: Date) -> String {
+        shortDateFormatter.string(from: date)
     }
 
     private static func clock(_ seconds: Double) -> String {

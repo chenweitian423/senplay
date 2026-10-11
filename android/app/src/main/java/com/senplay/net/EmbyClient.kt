@@ -16,6 +16,25 @@ import org.json.JSONObject
  * X-Emby-Authorization header plus /Users/AuthenticateByName and /Items.
  */
 class EmbyClient(private val server: ServerConfig) {
+    /**
+     * Emby renders timestamps as ISO-8601 without a timezone suffix. Two patterns
+     * because newer builds include fractional seconds and older ones do not.
+     */
+    private fun dateMillis(raw: String): Long {
+        if (raw.isBlank()) return 0L
+        for (pattern in listOf(
+            "yyyy-MM-dd'T'HH:mm:ss.SSSSSSS'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss'Z'"
+        )) {
+            runCatching {
+                return java.text.SimpleDateFormat(pattern, java.util.Locale.US)
+                    .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+                    .parse(raw)!!.time
+            }
+        }
+        return 0L
+    }
+
 
     var accessToken: String = ""
         private set
@@ -78,7 +97,7 @@ class EmbyClient(private val server: ServerConfig) {
             .newBuilder()
             .addQueryParameter("IncludeItemTypes", includeTypes)
             .addQueryParameter("Recursive", if (recursive) "true" else "false")
-            .addQueryParameter("Fields", "Path,MediaSources,RunTimeTicks,Overview,ProductionYear,CommunityRating,UserData")
+            .addQueryParameter("Fields", "Path,MediaSources,RunTimeTicks,Overview,ProductionYear,CommunityRating,UserData,DateModified")
             .addQueryParameter("SortBy", sortBy.wire)
             .addQueryParameter("SortOrder", if (ascending) "Ascending" else "Descending")
             .addQueryParameter("ImageTypeLimit", "1")
@@ -103,7 +122,7 @@ class EmbyClient(private val server: ServerConfig) {
             .addQueryParameter("Recursive", "true")
             .addQueryParameter("MediaTypes", "Video")
             .addQueryParameter("Limit", limit.toString())
-            .addQueryParameter("Fields", "Path,MediaSources,RunTimeTicks,UserData")
+            .addQueryParameter("Fields", "Path,MediaSources,RunTimeTicks,UserData,DateModified")
             .addQueryParameter("api_key", accessToken)
             .build()
         fetchItems(url)
@@ -135,6 +154,8 @@ class EmbyClient(private val server: ServerConfig) {
                     url = id,
                     isDirectory = folderLike,
                     entryId = id,
+                    unplayedCount = userData?.optInt("UnplayedItemCount") ?: 0,
+                    modifiedAt = dateMillis(item.optString("DateModified")),
                     durationTicks = item.optLong("RunTimeTicks"),
                     played = userData?.optBoolean("Played") ?: false,
                     positionMs = (userData?.optLong("PlaybackPositionTicks") ?: 0L) / 10_000L,

@@ -21,6 +21,11 @@ struct MediaEntry: Identifiable, Hashable {
     /// Directory child count, when the source reports it. Emby and WebDAV do; a
     /// plain file listing does not, and zero means unknown rather than empty.
     let childCount: Int
+    /// Episodes not yet watched, from Emby's UserData. This is what "剩余播放数量"
+    /// means — a count of items, not a duration.
+    let unplayedCount: Int
+    /// Last modification, when the source reports it. The list's "文件夹项目显示时间".
+    let modifiedAt: Date?
     let entryId: String?
     let imageURL: String?
     /// Server-reported watch state, used by the poster wall and the resume strip.
@@ -37,6 +42,8 @@ struct MediaEntry: Identifiable, Hashable {
         isDirectory: Bool,
         size: Int = 0,
         childCount: Int = 0,
+        unplayedCount: Int = 0,
+        modifiedAt: Date? = nil,
         entryId: String? = nil,
         imageURL: String? = nil,
         isPlayed: Bool = false,
@@ -52,6 +59,8 @@ struct MediaEntry: Identifiable, Hashable {
         self.isDirectory = isDirectory
         self.size = size
         self.childCount = childCount
+        self.unplayedCount = unplayedCount
+        self.modifiedAt = modifiedAt
         self.entryId = entryId
         self.imageURL = imageURL
         self.isPlayed = isPlayed

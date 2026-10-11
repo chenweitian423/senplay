@@ -219,7 +219,7 @@ final class EmbyClient {
             URLQueryItem(name: "Recursive", value: recursive ? "true" : "false"),
             URLQueryItem(name: "SortBy", value: sortBy.rawValue),
             URLQueryItem(name: "SortOrder", value: ascending ? "Ascending" : "Descending"),
-            URLQueryItem(name: "Fields", value: "Path,MediaSources,RunTimeTicks,Overview,ProductionYear,CommunityRating,UserData"),
+            URLQueryItem(name: "Fields", value: "Path,MediaSources,RunTimeTicks,Overview,ProductionYear,CommunityRating,UserData,DateModified"),
             URLQueryItem(name: "ImageTypeLimit", value: "1"),
             URLQueryItem(name: "EnableImageTypes", value: "Primary,Backdrop,Thumb"),
             URLQueryItem(name: "api_key", value: accessToken)
@@ -260,7 +260,7 @@ final class EmbyClient {
             URLQueryItem(name: "Recursive", value: "true"),
             URLQueryItem(name: "MediaTypes", value: "Video"),
             URLQueryItem(name: "Limit", value: String(limit)),
-            URLQueryItem(name: "Fields", value: "Path,MediaSources,RunTimeTicks,UserData"),
+            URLQueryItem(name: "Fields", value: "Path,MediaSources,RunTimeTicks,UserData,DateModified"),
             URLQueryItem(name: "api_key", value: accessToken)
         ]
 
@@ -283,6 +283,17 @@ final class EmbyClient {
                         sortBy: .dateAdded, ascending: false, recursive: true, limit: limit)
     }
 
+    /// Emby renders timestamps as ISO-8601 without a timezone suffix; the formatter
+    /// is built with a fixed locale so it does not depend on the device's region.
+    static func date(_ raw: Any?) -> Date? {
+        guard let text = raw as? String, !text.isEmpty else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: text) { return date }
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: text)
+    }
+
     static func entry(from item: [String: Any], server: ServerConfig, token: String) -> MediaEntry? {
         guard let id = item["Id"] as? String else { return nil }
         let type = item["Type"] as? String ?? ""
@@ -296,6 +307,8 @@ final class EmbyClient {
             url: id,
             isDirectory: folderLike,
             size: 0,
+            unplayedCount: userData["UnplayedItemCount"] as? Int ?? 0,
+            modifiedAt: EmbyClient.date(item["DateModified"]),
             entryId: id,
             imageURL: Urls.join(server.address, "/Items/\(id)/Images/Primary?maxHeight=400&api_key=\(token)"),
             isPlayed: played,

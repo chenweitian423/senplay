@@ -21,6 +21,10 @@ data class MediaEntry(
     val size: Long = 0L,
     val entryId: String? = null,
     val childCount: Int = 0,
+    /** Episodes not yet watched, from Emby's UserData. "剩余播放数量" counts items, not time. */
+    val unplayedCount: Int = 0,
+    /** Last modification, when the source reports it. "文件夹项目显示时间". */
+    val modifiedAt: Long = 0L,
     val durationTicks: Long = 0L,
     val played: Boolean = false,
     /** Server-reported resume position, used by the poster wall and resume strip. */
