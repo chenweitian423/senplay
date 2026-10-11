@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    tags: ["v*"]
     paths:
       - "ios/**"
       - ".github/workflows/ios.yml"
@@ -54,7 +55,7 @@ jobs:
           path: ios/artifacts/*
 
       - name: Create release
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ios-unsigned

@@ -1,0 +1,38 @@
+name: KernelProbe
+
+# Isolated scaffold used only by .github/workflows/ios-kernel.yml to prove the
+# KSPlayer + FFmpegKit package graph resolves and links for device arm64.
+# It deliberately does not share a project with ios/ so the shipping build stays
+# independent of kernel work.
+
+options:
+  bundleIdPrefix: com.senplay.probe
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+
+packages:
+  KSPlayer:
+    url: https://github.com/kingslay/KSPlayer
+    from: "2.3.4"
+
+targets:
+  KernelProbe:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    dependencies:
+      - package: KSPlayer
+        product: KSPlayerUI
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.senplay.kernelprobe
+        PRODUCT_NAME: KernelProbe
+        GENERATE_INFOPLIST_FILE: "YES"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "5.0"
+        ENABLE_BITCODE: "NO"
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGNING_ALLOWED: "NO"

@@ -13,6 +13,7 @@ on:
         default: "首个构建：URL Scheme / WebDAV / Emby / 本地播放 / 断点续播"
   push:
     branches: [main]
+    tags: ["v*"]
     paths:
       - "android/**"
       - ".github/workflows/android.yml"
@@ -107,7 +108,7 @@ jobs:
           path: dist/*
 
       - name: Create release
-        if: github.event_name == 'workflow_dispatch' && inputs.create_release
+        if: (github.event_name == 'workflow_dispatch' && inputs.create_release) || startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: android-v${{ steps.version.outputs.name }}

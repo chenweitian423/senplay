@@ -1,0 +1,84 @@
+name: iOS kernel probe
+
+# Answers one question before the player screen is moved off AVFoundation:
+# does the KSPlayer + FFmpegKit package graph resolve and link for device arm64?
+# The scaffold lives in .github/kernel-probe and never touches ios/.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/kernel-probe/**"
+      - ".github/workflows/ios-kernel.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Show toolchain
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          swift --version
+
+      - name: Generate probe project
+        working-directory: .github/kernel-probe
+        run: |
+          set -euo pipefail
+          xcodegen generate
+          xcodebuild -list -project KernelProbe.xcodeproj
+
+      - name: Resolve package graph
+        working-directory: .github/kernel-probe
+        run: |
+          set -euo pipefail
+          xcodebuild -resolvePackageDependencies -project KernelProbe.xcodeproj -scheme KernelProbe
+
+      - name: Report resolved checkouts
+        working-directory: .github/kernel-probe
+        run: |
+          set -euo pipefail
+          ROOT=$(find . -maxdepth 4 -type d -name checkouts | head -n1)
+          echo "checkouts root: $ROOT"
+          [ -n "$ROOT" ] || { echo "::error::no package checkouts were produced"; exit 1; }
+          ls -1 "$ROOT"
+          for pkg in KSPlayer FFmpegKit; do
+            if [ -d "$ROOT/$pkg" ]; then
+              echo "--- $pkg ---"
+              git -C "$ROOT/$pkg" describe --tags --always 2>/dev/null || true
+              git -C "$ROOT/$pkg" log -1 --pretty='%h %s' 2>/dev/null || true
+            fi
+          done
+
+      - name: Build for device arm64
+        working-directory: .github/kernel-probe
+        run: |
+          set -euo pipefail
+          xcodebuild -project KernelProbe.xcodeproj -scheme KernelProbe \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" \
+            build 2>&1 | tail -n 60
+
+      - name: Report linked kernel
+        working-directory: .github/kernel-probe
+        run: |
+          set -euo pipefail
+          APP=$(find build/Build/Products -maxdepth 2 -name 'KernelProbe.app' -type d | head -n1)
+          [ -n "$APP" ] || { echo "::error::probe app was not produced"; exit 1; }
+          BIN="$APP/KernelProbe"
+          echo "linked dynamic libraries:"
+          otool -L "$BIN" | sed -n '2,40p'
+          echo "app size: $(du -sh "$APP" | awk '{print $1}')"
+          echo "KSPlayer framework present: $(test -d "$APP/Frameworks/KSPlayer.framework" && echo yes || echo no)"
