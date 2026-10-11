@@ -130,7 +130,10 @@ def main() -> int:
 
     android = android_live()
 
-    all_keys = sorted(set(ios) | set(android))
+    # Only preference keys. The direct-read pattern also catches storage keys like
+    # "servers.v1" and the user-agent string, which are not settings at all and were
+    # padding the report with things nobody expects to find in a settings screen.
+    all_keys = sorted(k for k in set(ios) | set(android) if k.startswith("pref."))
     dead = [k for k in all_keys if not ios.get(k) and not android.get(k)]
 
     print(f"keys with a real read on iOS:     {sum(1 for k in ios if ios[k])}")

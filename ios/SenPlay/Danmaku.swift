@@ -119,6 +119,11 @@ struct DanmakuOverlay: View {
     let fontSize: Double
     let speed: Double
     let area: Double
+    /// "弹幕关键词屏蔽" — matched case-insensitively as substrings, which is what a
+    /// viewer typing a word into a settings field expects.
+    var blockedKeywords: [String] = []
+    /// "底部弹幕转为浮动" — the reference app lets bottom comments scroll instead.
+    var bottomFloats: Bool = false
 
     private struct Lane {
         var busyUntil: Double = 0
@@ -134,8 +139,12 @@ struct DanmakuOverlay: View {
 
         for item in items {
             guard item.time <= currentTime, item.time > currentTime - window else { continue }
-            // Top/bottom comments never queue for a lane; they replace in place.
-            if item.mode == .top || item.mode == .bottom {
+            if !blockedKeywords.isEmpty, blockedKeywords.contains(where: {
+                !$0.isEmpty && item.text.localizedCaseInsensitiveContains($0)
+            }) { continue }
+            // Top comments never queue for a lane; bottom ones only replace in place
+            // when the viewer has not asked for them to float.
+            if item.mode == .top || (item.mode == .bottom && !bottomFloats) {
                 result.append((item, item.mode == .top ? 0 : laneCount - 1))
                 continue
             }

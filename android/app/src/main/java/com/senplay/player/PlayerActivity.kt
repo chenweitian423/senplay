@@ -196,6 +196,8 @@ private const val P_SHOW_OSD = "ui.showOSD"
 private const val P_SHOW_SKIP_TIP = "ui.showSkipTip"
 private const val P_SHOW_START_TITLE = "ui.showStartTitle"
 private const val P_AUTO_FULLSCREEN = "ui.autoFullScreen"
+private const val P_DANMAKU_KEYWORDS = "danmaku.keywords"
+private const val P_DANMAKU_BOTTOM_FLOAT = "danmaku.bottomToFloat"
 private const val P_REMEMBER_SPEED = "play.rememberSpeed"
 private const val P_LAST_SPEED = "play.lastSpeed"
 
@@ -265,6 +267,14 @@ fun PlayerScreen(
     val showSkipTip = remember { store.prefBool(P_SHOW_SKIP_TIP, true) }
     val showStartTitle = remember { store.prefBool(P_SHOW_START_TITLE, true) }
     val autoFullScreen = remember { store.prefBool(P_AUTO_FULLSCREEN, false) }
+    val bottomToFloat = remember { store.prefBool(P_DANMAKU_BOTTOM_FLOAT, false) }
+    /** Separators are whatever the viewer typed, not a single fixed character. */
+    val blockedKeywords = remember {
+        store.prefString(P_DANMAKU_KEYWORDS, "")
+            .split(',', '，', ';', '；', '\n', '|')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+    }
     val skipOutroSeconds = remember { store.prefInt(P_SKIP_OUTRO, 0) }
     val nextCountdown = remember { store.prefInt(P_NEXT_COUNTDOWN, 5) }
     val danmakuEnabled = remember { store.prefBool(P_DANMAKU_ENABLED, true) }
@@ -604,6 +614,8 @@ fun PlayerScreen(
                 fontSize = danmakuSize,
                 speed = danmakuSpeed,
                 area = danmakuArea,
+                blockedKeywords = blockedKeywords,
+                bottomFloats = bottomToFloat,
                 modifier = Modifier.fillMaxSize()
             )
         }

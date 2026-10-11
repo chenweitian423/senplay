@@ -541,6 +541,8 @@ struct PlayerScreen: View {
     @AppStorage(PrefKey.longPressSpeed) private var longPressSpeedRate = 2.0
     @AppStorage("pref.audio.firstLanguage") private var preferredAudioLanguage = ""
     @AppStorage("pref.subtitle.firstLanguage") private var preferredSubtitleLanguage = ""
+    @AppStorage("pref.danmaku.keywords") private var danmakuKeywordText = ""
+    @AppStorage("pref.danmaku.bottomToFloat") private var bottomToFloat = false
     @AppStorage("pref.gesture.longPressLeftSpeed") private var longPressLeftSpeed = 0.5
     @AppStorage("pref.gesture.longPressRightSpeed") private var longPressRightSpeed = 2.0
     @State private var hud: PlayerHUD?
@@ -598,7 +600,9 @@ struct PlayerScreen: View {
                                    currentTime: currentTime,
                                    fontSize: danmakuSize,
                                    speed: danmakuSpeed,
-                                   area: danmakuArea)
+                                   area: danmakuArea,
+                                   blockedKeywords: blockedKeywords,
+                                   bottomFloats: bottomToFloat)
                         .ignoresSafeArea()
                 }
 
@@ -1497,6 +1501,15 @@ struct PlayerScreen: View {
                 danmakuItems = items
             }
         }
+    }
+
+    /// Keywords arrive as free text; separators are whatever the viewer used, so the
+    /// list is split on any of the common ones rather than a single character.
+    private var blockedKeywords: [String] {
+        danmakuKeywordText
+            .components(separatedBy: CharacterSet(charactersIn: ",，;；\n|"))
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
     }
 
     /// Restores the rate the viewer last chose. Off by default only when the

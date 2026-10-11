@@ -37,6 +37,10 @@ fun DanmakuOverlay(
     fontSize: Double,
     speed: Double,
     area: Double,
+    /** "弹幕关键词屏蔽" — matched case-insensitively as substrings. */
+    blockedKeywords: List<String> = emptyList(),
+    /** "底部弹幕转为浮动" — the reference app lets bottom comments scroll instead. */
+    bottomFloats: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     if (items.isEmpty()) return
@@ -53,7 +57,14 @@ fun DanmakuOverlay(
 
         for (item in items) {
             if (item.time > currentTime || item.time <= currentTime - window) continue
-            if (item.mode == DanmakuMode.TOP || item.mode == DanmakuMode.BOTTOM) {
+            if (blockedKeywords.any { it.isNotBlank() && item.text.contains(it, ignoreCase = true) }) {
+                continue
+            }
+            // Top comments never queue for a lane; bottom ones only replace in place
+            // when the viewer has not asked for them to float.
+            if (item.mode == DanmakuMode.TOP ||
+                (item.mode == DanmakuMode.BOTTOM && !bottomFloats)
+            ) {
                 result += VisibleDanmaku(item, if (item.mode == DanmakuMode.TOP) 0 else laneCount - 1)
                 continue
             }
