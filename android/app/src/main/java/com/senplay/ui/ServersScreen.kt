@@ -474,11 +474,18 @@ private fun ServerBrowserScreen(
         }
 
         val displayContext = LocalContext.current
-        val display = remember(displayContext) {
-            ListDisplay(LibraryStore.get(displayContext))
-        }
+    val display = remember(displayContext) {
+        ListDisplay(LibraryStore.get(displayContext))
+    }
 
-        if (grid) {
+    // A section switch flipped in settings while this screen was open leaves the
+    // selection pointing at a strip that is no longer offered.
+    LaunchedEffect(display.showContinue, display.showCollection) {
+        val available = display.visibleStrips
+        if (strip !in available) available.firstOrNull()?.let { strip = it }
+    }
+
+    if (grid) {
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = 118.dp),
                 modifier = Modifier.fillMaxWidth(),
@@ -548,7 +555,10 @@ private fun ServerBrowserScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("板块", style = MaterialTheme.typography.labelMedium)
-                    Strip.values().forEach { option ->
+                    // This menu sits outside the browser's scope, so the flags are
+                    // read here rather than reached for.
+                    ListDisplay(LibraryStore.get(LocalContext.current))
+                        .visibleStrips.forEach { option ->
                         TextButton(onClick = {
                             strip = option
                             stack = emptyList()
@@ -600,6 +610,21 @@ private class ListDisplay(store: LibraryStore) {
     val showRemaining = store.prefBool("library.showRemaining", true)
     val showMediaInfo = store.prefBool("library.showMediaInfo", true)
     val titleCentered = store.prefString("library.titleAlignment", "leading") == "center"
+    val showContinue = store.prefBool("library.showContinue", true)
+    val showCollection = store.prefBool("library.showCollection", true)
+
+    /**
+     * The strips whose section the viewer has not switched off. FILES and LATEST have
+     * no switch in the reference app's settings and are always available.
+     */
+    val visibleStrips: List<Strip>
+        get() = Strip.values().filter {
+            when (it) {
+                Strip.RESUME -> showContinue
+                Strip.COLLECTIONS -> showCollection
+                else -> true
+            }
+        }
 }
 
 /**

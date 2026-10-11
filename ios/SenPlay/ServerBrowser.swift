@@ -25,6 +25,8 @@ private struct ListDisplay {
     var showRemaining = true
     var showMediaInfo = true
     var titleCentered = false
+    var showContinue = true
+    var showCollection = true
 
     init(_ defaults: UserDefaults = .standard) {
         showSize = defaults.object(forKey: "pref.list.showSize") as? Bool ?? true
@@ -41,6 +43,8 @@ private struct ListDisplay {
         showMediaInfo = defaults.object(forKey: "pref.library.showMediaInfo") as? Bool ?? true
         titleCentered = (defaults.string(forKey: "pref.library.titleAlignment") ?? "leading")
             == "center"
+        showContinue = defaults.object(forKey: "pref.library.showContinue") as? Bool ?? true
+        showCollection = defaults.object(forKey: "pref.library.showCollection") as? Bool ?? true
     }
 }
 
@@ -51,6 +55,19 @@ struct ServerBrowserView: View {
     private enum Strip: String, CaseIterable, Identifiable {
         case files, resume, latest, collections
         var id: String { rawValue }
+        /// The strips whose section the viewer has not switched off. `files` and
+        /// `latest` have no switch in the reference app's settings and are always
+        /// available.
+        static func visible(_ display: ListDisplay) -> [Strip] {
+            allCases.filter { strip in
+                switch strip {
+                case .resume: return display.showContinue
+                case .collections: return display.showCollection
+                case .files, .latest: return true
+                }
+            }
+        }
+
         var title: String {
             switch self {
             case .files: return "文件"
@@ -71,6 +88,15 @@ struct ServerBrowserView: View {
 
     @State private var entries: [MediaEntry] = []
     private let display = ListDisplay()
+
+    /// A section switch flipped in settings while this screen was open leaves the
+    /// selection pointing at a strip that is no longer offered.
+    private func fallBackIfStripHidden() {
+        let available = Strip.visible(display)
+        if !available.contains(strip), let first = available.first {
+            strip = first
+        }
+    }
     @State private var path = ""
     @State private var parentId: String? = nil
     @State private var stack: [(String, String?)] = []
@@ -109,7 +135,10 @@ struct ServerBrowserView: View {
             .onChange(of: strip) { _ in handleStripChange() }
             .onChange(of: sortBy) { _ in scheduleReload() }
             .onChange(of: ascending) { _ in scheduleReload() }
-            .task { await reload() }
+            .task {
+                fallBackIfStripHidden()
+                await reload()
+            }
     }
 
     /// Split out of `body` on purpose: keeping this chain inline made the type
@@ -160,7 +189,7 @@ struct ServerBrowserView: View {
             if hasStrips {
                 Menu {
                     Picker("板块", selection: $strip) {
-                        ForEach(Strip.allCases) { Text($0.title).tag($0) }
+                        ForEach(Strip.visible(display)) { Text($0.title).tag($0) }
                     }
                     if isEmbyLike {
                         Divider()
