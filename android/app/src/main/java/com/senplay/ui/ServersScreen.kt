@@ -57,11 +57,13 @@ import com.senplay.core.MediaEntry
 import com.senplay.core.PlayRequest
 import com.senplay.core.ServerConfig
 import com.senplay.net.EmbyClient
+import com.senplay.net.SmbTarget
 import com.senplay.net.WebDavClient
+import com.senplay.net.listSmbDirectory
 import kotlinx.coroutines.launch
 import java.util.UUID
 
-private val SERVER_TYPES = listOf("webdav", "emby", "jellyfin")
+private val SERVER_TYPES = listOf("webdav", "emby", "jellyfin", "feiniu", "smb")
 
 @Composable
 fun ServersScreen(store: LibraryStore, onPlay: (PlayRequest) -> Unit) {
@@ -179,6 +181,23 @@ private fun ServerBrowserScreen(
                     Strip.RESUME -> client.resume()
                     Strip.LATEST -> client.latest()
                 }
+            } else if (server.type == "smb") {
+                val target = SmbTarget(
+                    host = server.address.substringAfter("smb://").substringBefore('/').substringBefore(':'),
+                    share = server.address.substringAfter("smb://").substringAfter('/', "").substringBefore('/'),
+                    path = path,
+                    user = server.username,
+                    password = server.password,
+                    domain = null
+                )
+                listSmbDirectory(target).map { entry ->
+                    MediaEntry(
+                        name = entry.name,
+                        url = "smb://${target.host}/${target.share}${entry.url}",
+                        isDirectory = entry.isDirectory,
+                        size = entry.size
+                    )
+                }.sortedWith(compareByDescending<MediaEntry> { it.isDirectory }.thenBy { it.name })
             } else {
                 WebDavClient.list(server, path)
             }
@@ -313,7 +332,11 @@ private fun ServerBrowserScreen(
                 parentId = entry.entryId
             } else if (!server.isEmbyLike && entry.isDirectory) {
                 stack = stack + (path to parentId)
-                path = entry.url
+                path = if (server.type == "smb") {
+                    entry.url.substringAfter("smb://").substringAfter('/', "")
+                } else {
+                    entry.url
+                }
             } else {
                 val subtitle = matchSubtitle(entry)
                 val request = if (server.isEmbyLike) {

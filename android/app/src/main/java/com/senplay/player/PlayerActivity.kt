@@ -239,9 +239,12 @@ fun PlayerScreen(
     val danmakuSkipShort = remember { store.prefBool(P_DANMAKU_SKIP_SHORT, true) }
 
     val player = remember {
-        val dataSource = DefaultDataSource.Factory(
-            context,
-            OkHttpDataSource.Factory(Http.client).setUserAgent(userAgent ?: store.defaultUserAgent)
+        val dataSource = com.senplay.net.SchemeRoutingDataSourceFactory(
+            DefaultDataSource.Factory(
+                context,
+                OkHttpDataSource.Factory(Http.client)
+                    .setUserAgent(userAgent ?: store.defaultUserAgent)
+            )
         )
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSource))
