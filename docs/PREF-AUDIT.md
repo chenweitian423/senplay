@@ -128,3 +128,33 @@ keys with a real read on Android: 54
 
 **这张表的用途**：区分「参考实现有而我们没有的板块」与「同一功能的不同实现」。前者是
 能力缺口（`kEmbyShowCarousel` 那一组），后者是接线问题。
+
+## 能力对不齐的地方（round 36 核对）
+
+目标是双端全量复刻，所以两端的实现差异本身就是要记录的状态。
+
+| 能力 | iOS | Android | 说明 |
+|---|---|---|---|
+| 投屏（DLNA） | **无** | 有 | iOS 需要 `com.apple.developer.networking.multicast` entitlement 才能做 SSDP 发现，当前工程没有申请。这是平台约束，不是没接线。 |
+| SMB | **无** | 有 | AMSMB2 没有可用的公开 API；其余候选都要求更高系统版本。 |
+| SFTP | **无** | 有 | Citadel 要求 iOS 17，而参考实现的 `MinimumOSVersion` 是 10.0。 |
+| 画中画 | 有（`layer.isPipActive`） | 有（`enterPip`） | 两端都成立，iOS 由 KSPlayer 持有生命周期。 |
+| 后台音频 | 有（`setAudioSession`） | 有（`MediaSessionService`） | 两端都成立。 |
+| 片头片尾跳过、连播、倍速记忆 | 有 | 有 | — |
+
+**这三项 iOS 缺失不是"忘了做"**，每一条都有具体的外部原因。它们应当留在表里，
+而不是被"双端已对齐"这类总结盖过去——下一轮或下一个人需要知道的是**为什么缺**，
+以及**重新评估的前提是什么**（申请到 entitlement、或内核换库、或最低版本上调）。
+
+## 内核无落点的一类
+
+这些键读得到，但当前的播放内核没有接收它们的入口：
+
+- 字幕样式一组：`bold` / `italic` / `outlineWidth` / `shadowWidth` / `ratioFix` /
+  `hdrSubtitle` / `ignoreAss` / `ignoreSrt`。iOS 走 libass 从字幕文件渲染样式，
+  Android 走 Media3 的 `SubtitleView` 默认样式，两端都没有暴露"覆盖文件样式"的接口。
+- 键长按速率：`gesture.longPressLeftSpeed` / `longPressRightSpeed`。这需要遥控器或
+  外接键盘的按键重复事件；触摸屏的长按是连续手势，没有"重复速率"这个概念。
+
+**把这一类与"没接线"分开写**，是因为它们的处理方式不同：没接线的是待办，内核无落点的
+要么等内核暴露接口，要么接受这一项在触摸设备上不适用。

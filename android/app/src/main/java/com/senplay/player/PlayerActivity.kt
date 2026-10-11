@@ -745,6 +745,30 @@ fun PlayerScreen(
             )
         }
 
+        if (castOpen) {
+            com.senplay.ui.CastDialog(
+                onDismiss = { castOpen = false },
+                onCast = { device ->
+                    castOpen = false
+                    castTarget = device
+                    // The device fetches the media itself, so the local player stops
+                    // rather than continuing to decode into an invisible surface.
+                    scope.launch {
+                        val ok = runCatching {
+                            com.senplay.net.Dlna.play(device, url, name)
+                        }.getOrDefault(false)
+                        if (ok) {
+                            player.pause()
+                            showHud("已投屏到 ${device.name}")
+                        } else {
+                            castTarget = null
+                            showHud("投屏失败")
+                        }
+                    }
+                }
+            )
+        }
+
         if (aspectMenuOpen) {
             AlertDialog(
                 onDismissRequest = { aspectMenuOpen = false },
