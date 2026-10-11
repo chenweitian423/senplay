@@ -15,7 +15,7 @@
 | 片头片尾跳过 | 完成 | 阈值由偏好给出，片尾只倒计时不强制跳，可取消 |
 | 断点续播 | 完成 | 双端各自持久化，Emby/Plex 的服务器端进度也读入 |
 | 倍速记忆 | 完成 | `pref.play.forwardSeconds` / `backwardSeconds` 驱动的按钮与手势 |
-| 后台音频 | 完成 | iOS `UIBackgroundModes: audio`；Android 前台服务由 Media3 管理 |
+| 后台音频 | 完成 | iOS `UIBackgroundModes: audio`；Android 是 `MediaSessionService`，播放器归服务所有，界面通过 MediaController 驱动 |
 | 锁屏 / 控制中心 | 完成 | iOS `MPRemoteCommandCenter`：播放、暂停、切换、拖动、前后跳 |
 | 画中画 | 完成 | iOS 用 KSPlayerLayer 的 PiP 生命周期；Android `PictureInPictureParams` |
 | 投屏 | 完成 | iOS 走 AirPlay / 外部播放；Android 另有 DLNA（见下） |

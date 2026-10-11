@@ -42,6 +42,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -78,6 +79,10 @@ import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.media3.common.Player
 import android.media.audiofx.LoudnessEnhancer
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
+import android.content.ComponentName
+import com.google.common.util.concurrent.MoreExecutors
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
@@ -257,36 +262,18 @@ fun PlayerScreen(
     val multiChannel = remember { store.prefBool(P_MULTI_CHANNEL, false) }
     @Suppress("UNUSED_VARIABLE") val multiChannelNotice = multiChannel
 
-    val player = remember {
-        val dataSource = com.senplay.net.SchemeRoutingDataSourceFactory(
-            DefaultDataSource.Factory(
-                context,
-                OkHttpDataSource.Factory(Http.client)
-                    .setUserAgent(userAgent ?: store.defaultUserAgent)
-            )
-        )
-        // Pre-cache. "不缓存" keeps memory flat on long files; "保留最后一次" trades
-        // memory for a smoother scrub near the playhead.
-        val loadControl = if (preloadMode == "last") {
-            DefaultLoadControl.Builder()
-                .setBufferDurationsMs(
-                    60_000,   // minBufferMs
-                    300_000,  // maxBufferMs
-                    10_000,   // bufferForPlaybackMs
-                    20_000    // bufferForPlaybackAfterRebufferMs
-                )
-                .build()
-        } else {
-            DefaultLoadControl.Builder()
-                .setBufferDurationsMs(15_000, 60_000, 2_500, 5_000)
-                .build()
-        }
+    // The player lives in PlaybackService so playback survives leaving the app; the
+    // activity drives it through a controller. The connection is asynchronous, so the
+    // UI waits for it and everything below this point sees a non-optional player.
+    val connection = remember { mutableStateOf<MediaController?>(null) }
+    val ready = connection.value
 
-        ExoPlayer.Builder(context)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSource))
-            .setLoadControl(loadControl)
-            .build()
-            .apply {
+    DisposableEffect(Unit) {
+        val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
+        val future = MediaController.Builder(context, token).buildAsync()
+        future.addListener(
+            {
+                val controller = future.get()
                 val builder = MediaItem.Builder().setUri(Uri.parse(url))
                 if (!subtitleUrl.isNullOrBlank()) {
                     builder.setSubtitleConfigurations(
@@ -299,13 +286,45 @@ fun PlayerScreen(
                         )
                     )
                 }
-                setMediaItem(builder.build())
-                prepare()
+                controller.setMediaItem(builder.build())
+                controller.prepare()
                 val resume = if (startPositionMs > 0L) startPositionMs
                 else if (resumeFromLast) store.savedPosition(url) else 0L
-                if (resume > 0L) seekTo(resume)
-                playWhenReady = true
-            }
+                if (resume > 0L) controller.seekTo(resume)
+                controller.playWhenReady = true
+                connection.value = controller
+            },
+            MoreExecutors.directExecutor()
+        )
+        onDispose {
+            connection.value = null
+            MediaController.releaseFuture(future)
+        }
+    }
+
+    if (ready == null) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+
+    val player: MediaController = ready
+
+    LaunchedEffect(player, showOSD) {
+        while (showOSD) {
+            osd = OsdStats(
+                videoBitrate = PlaybackStats.videoBitrate,
+                audioBitrate = PlaybackStats.audioBitrate,
+                dropped = PlaybackStats.droppedFrames,
+                width = PlaybackStats.width,
+                height = PlaybackStats.height
+            )
+            delay(1000)
+        }
     }
 
     fun showHud(text: String) {
@@ -315,7 +334,8 @@ fun PlayerScreen(
     fun advanceToNext(next: Pair<String, String>) {
         upNext = null
         countdown = 0
-        store.rememberProgress(url, name, player.currentPosition, player.duration.coerceAtLeast(0))
+        store.rememberProgress(url, name, player.currentPosition ?: 0L,
+            (player.duration ?: 0L).coerceAtLeast(0L))
         player.stop()
         onPlayNext(next.first, next.second)
     }
@@ -346,88 +366,6 @@ fun PlayerScreen(
         val endpoint = com.senplay.core.danmakuEndpoints(store).firstOrNull() ?: return@LaunchedEffect
         val keyword = url.substringAfterLast('/').substringBeforeLast('.')
         danmaku = com.senplay.core.DanmakuLoader.fetch(keyword, endpoint)
-    }
-
-    // Live counters. Media3 reports these through an analytics listener rather than
-    // exposing them on the player, so they are captured as they arrive.
-    DisposableEffect(player) {
-        val listener = object : androidx.media3.exoplayer.analytics.AnalyticsListener {
-            override fun onVideoInputFormatChanged(
-                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
-                format: androidx.media3.common.Format,
-                decoderReuseEvaluation: androidx.media3.exoplayer.DecoderReuseEvaluation?
-            ) {
-                osd = (osd ?: OsdStats()).copy(videoBitrate = format.bitrate)
-            }
-
-            override fun onAudioInputFormatChanged(
-                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
-                format: androidx.media3.common.Format,
-                decoderReuseEvaluation: androidx.media3.exoplayer.DecoderReuseEvaluation?
-            ) {
-                osd = (osd ?: OsdStats()).copy(audioBitrate = format.bitrate)
-            }
-
-            override fun onDroppedVideoFrames(
-                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
-                droppedFrames: Int,
-                elapsedMs: Long
-            ) {
-                osd = (osd ?: OsdStats()).copy(dropped = droppedFrames)
-            }
-
-            override fun onVideoSizeChanged(
-                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
-                videoSize: androidx.media3.common.VideoSize
-            ) {
-                osd = (osd ?: OsdStats()).copy(
-                    width = videoSize.width,
-                    height = videoSize.height
-                )
-            }
-        }
-        player.addAnalyticsListener(listener)
-        onDispose { player.removeAnalyticsListener(listener) }
-    }
-
-    // LoudnessEnhancer is Android's own gain stage — the counterpart of the iOS
-    // side's volume filter, and the thing "音量到达 100% 后继续放大" actually means.
-    DisposableEffect(player) {
-        val enhancer = if (audioEnhance) {
-            LoudnessEnhancer(player.audioSessionId).apply {
-                setTargetGain(600) // +6 dB
-                enabled = true
-            }
-        } else null
-        onDispose {
-            enhancer?.enabled = false
-            enhancer?.release()
-        }
-    }
-
-    if (castOpen) {
-        com.senplay.ui.CastDialog(
-            onDismiss = { castOpen = false },
-            onCast = { device ->
-                castOpen = false
-                // Only a network address is castable: the renderer fetches the media
-                // itself, so a local file would need a server we do not run here.
-                if (url.startsWith("http://") || url.startsWith("https://")) {
-                    scope.launch {
-                        val started = com.senplay.net.Dlna.play(device, url, name)
-                        if (started) {
-                            castTarget = device
-                            player.pause()
-                            showHud("已投屏到 ${device.name}")
-                        } else {
-                            showHud("投屏失败")
-                        }
-                    }
-                } else {
-                    showHud("只有网络地址可以投屏")
-                }
-            }
-        )
     }
 
     LaunchedEffect(player) {
@@ -607,7 +545,7 @@ fun PlayerScreen(
                 com.senplay.ui.OsdOverlay(
                     stats = current,
                     positionMs = position,
-                    bufferedMs = player.bufferedPosition
+                    bufferedMs = player.bufferedPosition ?: 0L
                 )
             }
         }

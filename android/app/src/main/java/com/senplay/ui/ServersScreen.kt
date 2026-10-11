@@ -201,10 +201,18 @@ private fun ServerBrowserScreen(
                     password = server.password,
                     domain = null
                 )
+                val authority = buildString {
+                    if (target.user.isNotBlank()) {
+                        append(encodeUserInfo(target.user))
+                        if (target.password.isNotBlank()) append(":" + encodeUserInfo(target.password))
+                        append('@')
+                    }
+                    append(target.host)
+                }
                 listSmbDirectory(target).map { entry ->
                     MediaEntry(
                         name = entry.name,
-                        url = "smb://${target.host}/${target.share}${entry.url}",
+                        url = "smb://$authority/${target.share}${entry.url}",
                         isDirectory = entry.isDirectory,
                         size = entry.size
                     )
@@ -253,16 +261,18 @@ private fun ServerBrowserScreen(
                 listSftpDirectory(server, path).map { entry ->
                     MediaEntry(
                         name = entry.name,
-                        url = "sftp://$authority${entry.url}",
+                        url = "sftp://${withCredentials(authority, server)}${entry.url}",
                         isDirectory = entry.isDirectory,
                         size = entry.size
                     )
                 }
             } else if (server.type == "ftp") {
+                val ftpAuthority = server.address.removePrefix("ftp://").removePrefix("FTP://")
+                    .substringBefore('/')
                 listFtpDirectory(server, path).map { entry ->
                     MediaEntry(
                         name = entry.name,
-                        url = "ftp://${server.address.removePrefix("ftp://").substringBefore('/')}${entry.url}",
+                        url = "ftp://${withCredentials(ftpAuthority, server)}${entry.url}",
                         isDirectory = entry.isDirectory,
                         size = entry.size
                     )
@@ -530,6 +540,20 @@ private fun ServerBrowserScreen(
             }
         )
     }
+}
+
+/** Percent-encodes a credential so an `@` or `:` inside it cannot break the URL. */
+private fun encodeUserInfo(value: String): String =
+    java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
+
+private fun withCredentials(authority: String, server: ServerConfig): String {
+    if (server.username.isBlank()) return authority
+    val credentials = buildString {
+        append(encodeUserInfo(server.username))
+        if (server.password.isNotBlank()) append(":" + encodeUserInfo(server.password))
+        append('@')
+    }
+    return credentials + authority
 }
 
 private enum class Strip(val title: String) {
