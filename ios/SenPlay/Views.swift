@@ -208,15 +208,16 @@ struct ServersView: View {
     @State private var newAddress = ""
     @State private var newUser = ""
     @State private var newPassword = ""
+    @State private var showingDiscovery = false
 
-    private let types = ["webdav", "emby", "jellyfin"]
+    private let types = ["webdav", "emby", "jellyfin", "feiniu"]
 
     var body: some View {
         NavigationView {
             List {
                 Section(header: Text("媒体服务器")) {
                     if store.servers.isEmpty {
-                        Text("支持 WebDAV / Emby / Jellyfin。也可以用 senplay://importserver?type=webdav&address=... 导入。")
+                        Text("支持 WebDAV / Emby / Jellyfin / 飞牛 fnOS。也可以用 senplay://importserver?type=webdav&address=... 导入，或直接扫描局域网。")
                             .font(.footnote)
                             .foregroundColor(.secondary)
                     }
@@ -242,8 +243,16 @@ struct ServersView: View {
             .navigationTitle("服务器")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { showingAdd = true } label: { Image(systemName: "plus") }
+                    HStack(spacing: 16) {
+                        Button { showingDiscovery = true } label: {
+                            Image(systemName: "wifi")
+                        }
+                        Button { showingAdd = true } label: { Image(systemName: "plus") }
+                    }
                 }
+            }
+            .sheet(isPresented: $showingDiscovery) {
+                DiscoverySheet(store: store, isPresented: $showingDiscovery)
             }
             .sheet(isPresented: $showingAdd) {
                 NavigationView {

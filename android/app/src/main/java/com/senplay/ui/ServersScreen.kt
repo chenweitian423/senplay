@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.InsertDriveFile
@@ -48,6 +49,7 @@ private val SERVER_TYPES = listOf("webdav", "emby", "jellyfin")
 fun ServersScreen(store: LibraryStore, onPlay: (PlayRequest) -> Unit) {
     var servers by remember { mutableStateOf(store.servers()) }
     var showAdd by remember { mutableStateOf(false) }
+    var showDiscovery by remember { mutableStateOf(false) }
     var browsing by remember { mutableStateOf<ServerConfig?>(null) }
 
     val current = browsing
@@ -60,14 +62,19 @@ fun ServersScreen(store: LibraryStore, onPlay: (PlayRequest) -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text("媒体服务器", style = MaterialTheme.typography.titleMedium)
-                IconButton(onClick = { showAdd = true }) {
-                    Icon(Icons.Filled.Add, contentDescription = "添加服务器")
+                Row {
+                    IconButton(onClick = { showDiscovery = true }) {
+                        Icon(Icons.Filled.Wifi, contentDescription = "扫描局域网")
+                    }
+                    IconButton(onClick = { showAdd = true }) {
+                        Icon(Icons.Filled.Add, contentDescription = "添加服务器")
+                    }
                 }
             }
 
             if (servers.isEmpty()) {
                 Text(
-                    "支持 WebDAV、Emby、Jellyfin。也可以用 senplay://importserver?type=webdav&address=... 一步导入。",
+                    "支持 WebDAV、Emby、Jellyfin、飞牛 fnOS。也可以用 senplay://importserver?type=webdav&address=... 一步导入，或直接扫描局域网。",
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                 )
@@ -94,6 +101,16 @@ fun ServersScreen(store: LibraryStore, onPlay: (PlayRequest) -> Unit) {
             server = current,
             onBack = { browsing = null },
             onPlay = onPlay
+        )
+    }
+
+    if (showDiscovery) {
+        DiscoveryDialog(
+            store = store,
+            onDismiss = {
+                showDiscovery = false
+                servers = store.servers()
+            }
         )
     }
 
