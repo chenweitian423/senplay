@@ -278,6 +278,34 @@ private fun ServerBrowserScreen(
             url to entry.name
         }
 
+        // Sidecar subtitles sharing the media file's stem. Simplified Chinese wins,
+        // then traditional, then anything else, then plain srt last.
+        fun matchSubtitle(entry: MediaEntry): String? {
+            val stem = entry.name.substringBeforeLast('.', entry.name).lowercase()
+            val extensions = setOf("srt", "ass", "ssa", "vtt", "sub")
+            val candidates = entries.filter { candidate ->
+                !candidate.isDirectory &&
+                    candidate.name.substringAfterLast('.', "").lowercase() in extensions &&
+                    candidate.name.substringBeforeLast('.', candidate.name).lowercase().startsWith(stem)
+            }
+            val chosen = candidates.minByOrNull { candidate ->
+                val lower = candidate.name.lowercase()
+                when {
+                    lower.contains("chs") || lower.contains("sc") ||
+                        lower.contains("简体") || lower.contains("zh-cn") -> 0
+                    lower.contains("cht") || lower.contains("tc") ||
+                        lower.contains("繁体") || lower.contains("zh-tw") -> 1
+                    lower.contains("eng") -> 3
+                    else -> 2
+                }
+            } ?: return null
+            return if (server.isEmbyLike) {
+                (emby ?: EmbyClient(server)).streamUrl(chosen)
+            } else {
+                chosen.url
+            }
+        }
+
         fun open(entry: MediaEntry) {
             val navigable = stack.isEmpty() || !server.isEmbyLike || strip == Strip.FILES
             if (server.isEmbyLike && strip == Strip.FILES && entry.isDirectory) {
@@ -287,11 +315,13 @@ private fun ServerBrowserScreen(
                 stack = stack + (path to parentId)
                 path = entry.url
             } else {
+                val subtitle = matchSubtitle(entry)
                 val request = if (server.isEmbyLike) {
                     val client = emby ?: EmbyClient(server)
                     PlayRequest(
                         url = client.streamUrl(entry),
                         name = entry.name,
+                        subtitleUrl = subtitle,
                         positionMs = entry.positionMs,
                         headers = client.mediaHeaders(),
                         queue = queue
@@ -300,6 +330,7 @@ private fun ServerBrowserScreen(
                     PlayRequest(
                         url = entry.url,
                         name = entry.name,
+                        subtitleUrl = subtitle,
                         positionMs = entry.positionMs,
                         queue = queue
                     )

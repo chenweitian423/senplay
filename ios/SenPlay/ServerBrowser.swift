@@ -264,6 +264,7 @@ struct ServerBrowserView: View {
             pending = PlayRequest(
                 url: client.streamURL(for: entry),
                 name: entry.name,
+                subtitleURL: matchingSubtitle(for: entry, emby: client),
                 headers: client.mediaHeaders(),
                 positionMs: entry.positionMs,
                 queue: siblings
@@ -272,10 +273,43 @@ struct ServerBrowserView: View {
             pending = PlayRequest(
                 url: entry.url,
                 name: entry.name,
+                subtitleURL: matchingSubtitle(for: entry, emby: nil),
                 positionMs: LibraryStore.shared.savedPosition(url: entry.url),
                 queue: siblings
             )
         }
+    }
+
+    /// Sidecar subtitles sharing the media file's stem, in the order a viewer would
+    /// prefer them: Simplified Chinese first, then anything else, then only then a
+    /// plain `.srt`.
+    private func matchingSubtitle(for entry: MediaEntry, emby: EmbyClient?) -> String? {
+        let subtitleExtensions: Set<String> = ["srt", "ass", "ssa", "vtt", "sub"]
+        let stem = (entry.name as NSString).deletingPathExtension.lowercased()
+
+        let candidates = entries.filter { candidate in
+            guard !candidate.isDirectory else { return false }
+            let ext = (candidate.name as NSString).pathExtension.lowercased()
+            guard subtitleExtensions.contains(ext) else { return false }
+            return (candidate.name as NSString).deletingPathExtension
+                .lowercased()
+                .hasPrefix(stem)
+        }
+        guard !candidates.isEmpty else { return nil }
+
+        let ranked = candidates.sorted { lhs, rhs in
+            subtitleRank(lhs.name) < subtitleRank(rhs.name)
+        }
+        guard let chosen = ranked.first else { return nil }
+        return emby.map { $0.streamURL(for: chosen) } ?? chosen.url
+    }
+
+    private func subtitleRank(_ name: String) -> Int {
+        let lower = name.lowercased()
+        if lower.contains("chs") || lower.contains("sc") || lower.contains("简体") || lower.contains("zh-cn") { return 0 }
+        if lower.contains("cht") || lower.contains("tc") || lower.contains("繁体") || lower.contains("zh-tw") { return 1 }
+        if lower.contains("eng") || lower.contains("en.") { return 3 }
+        return 2
     }
 
     /// Playable siblings of the current view, so the player can advance on its own.
