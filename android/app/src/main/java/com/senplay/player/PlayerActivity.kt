@@ -293,6 +293,9 @@ fun PlayerScreen(
     val screenshotToClipboard = remember {
         store.prefBool(P_SCREENSHOT_TO_CLIPBOARD, true)
     }
+    val floatingControls = remember {
+        store.prefString("ui.controlBarStyle", "bottom") == "floating"
+    }
     /** Separators are whatever the viewer typed, not a single fixed character. */
     val blockedKeywords = remember {
         store.prefString(P_DANMAKU_KEYWORDS, "")
@@ -814,7 +817,21 @@ fun PlayerScreen(
         }
 
         if (controlsVisible) {
-            Column(modifier = Modifier.fillMaxSize()) {
+            // "控制栏风格": bottom pins the chrome to the edges, floating insets it
+            // with a scrim so it reads as a layer over the video instead.
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (floatingControls) {
+                            Modifier
+                                .padding(horizontal = 16.dp, vertical = 10.dp)
+                                .background(Color.Black.copy(alpha = 0.25f))
+                        } else {
+                            Modifier
+                        }
+                    )
+            ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

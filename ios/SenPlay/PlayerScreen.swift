@@ -539,6 +539,7 @@ struct PlayerScreen: View {
     @State private var dragStartBrightness: Double = 0.5
     @State private var longPressSpeedActive = false
     @AppStorage(PrefKey.longPressSpeed) private var longPressSpeedRate = 2.0
+    @AppStorage(PrefKey.controlBarStyle) private var controlBarStyle = "bottom"
     @AppStorage("pref.audio.firstLanguage") private var preferredAudioLanguage = ""
     @AppStorage("pref.subtitle.firstLanguage") private var preferredSubtitleLanguage = ""
     @AppStorage("pref.danmaku.keywords") private var danmakuKeywordText = ""
@@ -646,6 +647,16 @@ struct PlayerScreen: View {
 
                 if controlsVisible {
                     controls()
+                        // "控制栏风格": bottom pins the chrome to the edges,
+                        // floating insets it with a scrim so it reads as a layer
+                        // over the video rather than part of the frame.
+                        .padding(.horizontal, floatingControls ? 18 : 0)
+                        .padding(.vertical, floatingControls ? 12 : 0)
+                        .background(
+                            floatingControls
+                                ? Color.black.opacity(0.35)
+                                : Color.clear
+                        )
                         .transition(.opacity)
                 }
 
@@ -1524,6 +1535,8 @@ struct PlayerScreen: View {
             }
         }
     }
+
+    private var floatingControls: Bool { controlBarStyle == "floating" }
 
     /// Keywords arrive as free text; separators are whatever the viewer used, so the
     /// list is split on any of the common ones rather than a single character.
