@@ -20,6 +20,22 @@ class EmbyClient(private val server: ServerConfig) {
      * Emby renders timestamps as ISO-8601 without a timezone suffix. Two patterns
      * because newer builds include fractional seconds and older ones do not.
      */
+    /**
+     * Emby lists everyone credited; the app only has room for a few names, and the
+     * order it returns is the billing order.
+     */
+    private fun castOf(item: org.json.JSONObject, limit: Int = 4): List<String> {
+        val people = item.optJSONArray("People") ?: return emptyList()
+        val names = mutableListOf<String>()
+        for (index in 0 until people.length()) {
+            val person = people.optJSONObject(index) ?: continue
+            if (person.optString("Type") != "Actor") continue
+            person.optString("Name").takeIf { it.isNotBlank() }?.let { names += it }
+            if (names.size >= limit) break
+        }
+        return names
+    }
+
     private fun dateMillis(raw: String): Long {
         if (raw.isBlank()) return 0L
         for (pattern in listOf(
@@ -97,7 +113,7 @@ class EmbyClient(private val server: ServerConfig) {
             .newBuilder()
             .addQueryParameter("IncludeItemTypes", includeTypes)
             .addQueryParameter("Recursive", if (recursive) "true" else "false")
-            .addQueryParameter("Fields", "Path,MediaSources,RunTimeTicks,Overview,ProductionYear,CommunityRating,UserData,DateModified")
+            .addQueryParameter("Fields", "Path,MediaSources,RunTimeTicks,Overview,ProductionYear,CommunityRating,UserData,DateModified,People")
             .addQueryParameter("SortBy", sortBy.wire)
             .addQueryParameter("SortOrder", if (ascending) "Ascending" else "Descending")
             .addQueryParameter("ImageTypeLimit", "1")
@@ -155,6 +171,8 @@ class EmbyClient(private val server: ServerConfig) {
                     isDirectory = folderLike,
                     entryId = id,
                     unplayedCount = userData?.optInt("UnplayedItemCount") ?: 0,
+                    episodeNumber = item.optInt("IndexNumber"),
+                    cast = castOf(item),
                     modifiedAt = dateMillis(item.optString("DateModified")),
                     durationTicks = item.optLong("RunTimeTicks"),
                     played = userData?.optBoolean("Played") ?: false,

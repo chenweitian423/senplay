@@ -613,6 +613,10 @@ private class ListDisplay(store: LibraryStore) {
     val showFolderTime = store.prefBool("list.showFolderTime", true)
     /** "显示剩余播放数量" — a count of remaining items, not a duration. */
     val showRemainingCount = store.prefBool("library.showRemaining", true)
+    /** "显示选集指示器" */
+    val showEpisodeIndicator = store.prefBool("library.showEpisodeIndicator", true)
+    /** "显示演职人员" */
+    val showCast = store.prefBool("library.showCast", true)
     val ellipsis = store.prefBool("list.ellipsis", false)
 
     // Poster marks: what the reference app puts on the artwork rather than in the
@@ -651,6 +655,9 @@ private fun rowDetail(entry: MediaEntry, display: ListDisplay): String? {
     } else {
         if (display.showSize && entry.size > 0) {
             parts += android.text.format.Formatter.formatFileSize(null, entry.size)
+        }
+        if (display.showEpisodeIndicator && entry.episodeNumber > 0) {
+            parts += "第 ${entry.episodeNumber} 集"
         }
         if (display.showDuration && entry.durationMs > 0) parts += clock(entry.durationMs)
     }
@@ -718,6 +725,9 @@ private fun posterMark(entry: MediaEntry, display: ListDisplay): String? {
     }
     if (display.showMediaInfo && !entry.isDirectory && entry.size > 0) {
         parts += android.text.format.Formatter.formatFileSize(null, entry.size)
+    }
+    if (display.showCast && entry.cast.isNotEmpty()) {
+        parts += entry.cast.joinToString(" / ")
     }
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
 }

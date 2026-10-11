@@ -20,6 +20,10 @@ private struct ListDisplay {
     var showItemCount = true
     /// "显示剩余播放数量" — a count of remaining items, not a duration.
     var showRemainingCount = true
+    /// "显示选集指示器"
+    var showEpisodeIndicator = true
+    /// "显示演职人员"
+    var showCast = true
     var rounded = true
     var ellipsis = false
     var fullNameOnMenu = true
@@ -42,6 +46,9 @@ private struct ListDisplay {
         showItemCount = defaults.object(forKey: "pref.library.showCount") as? Bool ?? true
         showFolderTime = defaults.object(forKey: "pref.list.showFolderTime") as? Bool ?? true
         showRemainingCount = defaults.object(forKey: "pref.library.showRemaining") as? Bool ?? true
+        showEpisodeIndicator =
+            defaults.object(forKey: "pref.library.showEpisodeIndicator") as? Bool ?? true
+        showCast = defaults.object(forKey: "pref.library.showCast") as? Bool ?? true
         rounded = defaults.object(forKey: "pref.list.rounded") as? Bool ?? true
         ellipsis = defaults.object(forKey: "pref.list.ellipsis") as? Bool ?? false
         fullNameOnMenu = defaults.object(forKey: "pref.list.fullNameOnMenu") as? Bool ?? true
@@ -333,6 +340,9 @@ struct ServerBrowserView: View {
             parts.append(ByteCountFormatter.string(fromByteCount: Int64(entry.size),
                                                    countStyle: .file))
         }
+        if display.showCast, !entry.cast.isEmpty {
+            parts.append(entry.cast.joined(separator: " / "))
+        }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
@@ -434,6 +444,9 @@ struct ServerBrowserView: View {
             if display.showSize, entry.size > 0 {
                 parts.append(ByteCountFormatter.string(fromByteCount: Int64(entry.size),
                                                        countStyle: .file))
+            }
+            if display.showEpisodeIndicator, entry.episodeNumber > 0 {
+                parts.append("第 \(entry.episodeNumber) 集")
             }
             if display.showDuration, entry.durationMs > 0 {
                 parts.append(Self.clock(entry.durationMs / 1000))

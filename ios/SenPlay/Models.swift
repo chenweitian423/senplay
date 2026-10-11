@@ -26,6 +26,10 @@ struct MediaEntry: Identifiable, Hashable {
     let unplayedCount: Int
     /// Last modification, when the source reports it. The list's "文件夹项目显示时间".
     let modifiedAt: Date?
+    /// Episode number within its season, for the "选集指示器".
+    let episodeNumber: Int
+    /// First few cast names, for "显示演职人员". Empty when the source sends none.
+    let cast: [String]
     let entryId: String?
     let imageURL: String?
     /// Server-reported watch state, used by the poster wall and the resume strip.
@@ -44,6 +48,8 @@ struct MediaEntry: Identifiable, Hashable {
         childCount: Int = 0,
         unplayedCount: Int = 0,
         modifiedAt: Date? = nil,
+        episodeNumber: Int = 0,
+        cast: [String] = [],
         entryId: String? = nil,
         imageURL: String? = nil,
         isPlayed: Bool = false,
@@ -61,6 +67,8 @@ struct MediaEntry: Identifiable, Hashable {
         self.childCount = childCount
         self.unplayedCount = unplayedCount
         self.modifiedAt = modifiedAt
+        self.episodeNumber = episodeNumber
+        self.cast = cast
         self.entryId = entryId
         self.imageURL = imageURL
         self.isPlayed = isPlayed

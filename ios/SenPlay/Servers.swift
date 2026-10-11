@@ -219,7 +219,7 @@ final class EmbyClient {
             URLQueryItem(name: "Recursive", value: recursive ? "true" : "false"),
             URLQueryItem(name: "SortBy", value: sortBy.rawValue),
             URLQueryItem(name: "SortOrder", value: ascending ? "Ascending" : "Descending"),
-            URLQueryItem(name: "Fields", value: "Path,MediaSources,RunTimeTicks,Overview,ProductionYear,CommunityRating,UserData,DateModified"),
+            URLQueryItem(name: "Fields", value: "Path,MediaSources,RunTimeTicks,Overview,ProductionYear,CommunityRating,UserData,DateModified,People"),
             URLQueryItem(name: "ImageTypeLimit", value: "1"),
             URLQueryItem(name: "EnableImageTypes", value: "Primary,Backdrop,Thumb"),
             URLQueryItem(name: "api_key", value: accessToken)
@@ -294,6 +294,17 @@ final class EmbyClient {
         return formatter.date(from: text)
     }
 
+    /// Emby lists everyone credited; the app only has room for a few names, and the
+    /// order it returns is the billing order.
+    static func cast(from item: [String: Any], limit: Int = 4) -> [String] {
+        let people = item["People"] as? [[String: Any]] ?? []
+        return people
+            .filter { ($0["Type"] as? String) == "Actor" }
+            .compactMap { $0["Name"] as? String }
+            .prefix(limit)
+            .map { $0 }
+    }
+
     static func entry(from item: [String: Any], server: ServerConfig, token: String) -> MediaEntry? {
         guard let id = item["Id"] as? String else { return nil }
         let type = item["Type"] as? String ?? ""
@@ -309,6 +320,8 @@ final class EmbyClient {
             size: 0,
             unplayedCount: userData["UnplayedItemCount"] as? Int ?? 0,
             modifiedAt: EmbyClient.date(item["DateModified"]),
+            episodeNumber: item["IndexNumber"] as? Int ?? 0,
+            cast: EmbyClient.cast(from: item),
             entryId: id,
             imageURL: Urls.join(server.address, "/Items/\(id)/Images/Primary?maxHeight=400&api_key=\(token)"),
             isPlayed: played,

@@ -25,6 +25,10 @@ data class MediaEntry(
     val unplayedCount: Int = 0,
     /** Last modification, when the source reports it. "文件夹项目显示时间". */
     val modifiedAt: Long = 0L,
+    /** Episode number within its season, for the "选集指示器". */
+    val episodeNumber: Int = 0,
+    /** First few cast names, for "显示演职人员". Empty when the source sends none. */
+    val cast: List<String> = emptyList(),
     val durationTicks: Long = 0L,
     val played: Boolean = false,
     /** Server-reported resume position, used by the poster wall and resume strip. */
