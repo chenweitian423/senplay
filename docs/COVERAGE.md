@@ -64,20 +64,22 @@
 
 ### SMB 与 SFTP 在 iOS 上缺失
 
-两者在 Swift 生态里都缺少可用的实现，原因一致：库要么没有公开 API，要么没有
-按偏移读取的能力，而播放器必须要后者。
+两个协议各试过一遍，卡在不同的地方，但结论相同。
 
-SMB：AMSMB2 在 3.4.0 与 4.0.x 上都几乎没有公开面——`SMB2Manager` 的公开成员
+**SMB**：AMSMB2 在 3.4.0 与 4.0.x 上都几乎没有公开面——`SMB2Manager` 的公开成员
 只有初始化器与镜像支持，文件句柄是 internal 的 final class，ObjC 兼容层只暴露
-六个 `__` 前缀方法。
+六个 `__` 前缀方法。没有能打开文件并读取的入口。
 
-SFTP：NMSSH 的通道只有 `readFile(atPath:)`，没有偏移读取，等于每次 seek 都要
-从头下载。swift-nio-ssh 提供的是 SSH 传输层，SFTP 子系统仍要自己实现（约数百行
-协议代码），性价比不成立。
+**SFTP**：NMSSH 的通道只有 `readFile(atPath:)`，没有偏移读取，等于每次 seek 都要
+从头下载。Citadel 0.12.1 有 `SFTPFile.read(from:length:)`，正是需要的能力，但它
+要求 iOS 17——而参考实现的 `MinimumOSVersion` 是 10.0，本工程已在内核约束下抬到
+15。为一个协议再抬两个大版本，代价远大于收益，因此撤回依赖。剩下的路是基于
+`swift-nio-ssh`（它支持 iOS 13）自己实现 SFTP 子系统，但本机 `sshd` 需要 root
+才能切换用户、起不来服务，没有可端到端验证的环境——写出一份"看起来对但连不上"
+的协议栈比不做更糟。
 
-与其引入一个打不开文件的依赖，不如让 iOS 的服务器类型列表里不出现这两个协议。
-iOS 侧同类需求由 WebDAV 覆盖——Alist 之类的桥接层可以把 SMB、SFTP、网盘统一挂
-成 WebDAV。
+iOS 侧同类需求由 WebDAV 覆盖：Alist 之类的桥接层可以把 SMB、SFTP 统一挂成
+WebDAV，S3 那条路径也适用于对象存储。
 
 ### DLNA / UPnP 仅 Android
 
