@@ -93,6 +93,7 @@ import android.content.ComponentName
 import com.google.common.util.concurrent.MoreExecutors
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.ui.PlayerView
 import com.senplay.core.Http
 import com.senplay.core.DanmakuItem
@@ -209,6 +210,8 @@ private const val P_SCREENSHOT_TO_CLIPBOARD = "video.screenshotToClipboard"
  * The same three modes the iOS side offers, mapped onto the view's own resize modes
  * rather than a scale transform of our own.
  */
+private enum class TrackPanel { SUBTITLE, AUDIO }
+
 private enum class AspectMode(val title: String, val resizeMode: Int) {
     FIT("适应屏幕", androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT),
     FILL("裁剪全屏", androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM),
@@ -239,6 +242,7 @@ fun PlayerScreen(
     var speedMenuOpen by remember { mutableStateOf(false) }
     var moreMenuOpen by remember { mutableStateOf(false) }
     var aspectMenuOpen by remember { mutableStateOf(false) }
+    var trackPanel by remember { mutableStateOf<TrackPanel?>(null) }
     var aspectMode by remember { mutableStateOf(AspectMode.FIT) }
 
     var controlsVisible by remember { mutableStateOf(true) }
@@ -430,6 +434,51 @@ fun PlayerScreen(
             clipboard.setPrimaryClip(ClipData.newUri(resolver, "SenPlay", uri))
         }
         showHud(if (screenshotToClipboard) "已保存截图并复制" else "已保存截图")
+    }
+
+    /**
+     * The selectable tracks of one kind, with the currently selected index.
+     *
+     * Media3 reports tracks as groups; a group with `isAdaptiveSupported` is a set of
+     * renditions of one track rather than a choice between languages, so only the
+     * first track of each group is offered — which is what a viewer picking
+     * "Japanese audio" means.
+     */
+    fun tracksOf(type: Int): List<Pair<String, androidx.media3.common.Tracks.Group>> {
+        val out = mutableListOf<Pair<String, androidx.media3.common.Tracks.Group>>()
+        for (group in player.currentTracks.groups) {
+            if (group.type != type) continue
+            val format = group.getTrackFormat(0)
+            val language = format.language
+            val label = buildString {
+                when (language) {
+                    null, "", "und" -> append(if (type == C.TRACK_TYPE_TEXT) "字幕" else "音轨")
+                    else -> append(language)
+                }
+                if (format.label != null) append(" · ").append(format.label)
+                if (group.isSelected) append("（当前）")
+            }
+            out += label to group
+        }
+        return out
+    }
+
+    /** Turns subtitles off without touching the audio selection. */
+    fun disableSubtitles() {
+        player.trackSelectionParameters = player.trackSelectionParameters
+            .buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            .build()
+    }
+
+    fun selectTrack(group: androidx.media3.common.Tracks.Group) {
+        player.trackSelectionParameters = player.trackSelectionParameters
+            .buildUpon()
+            .setTrackTypeDisabled(group.type, false)
+            .setOverrideForType(
+                androidx.media3.common.TrackSelectionOverride(group.mediaTrackGroup, 0)
+            )
+            .build()
     }
 
     /**
@@ -664,6 +713,35 @@ fun PlayerScreen(
             }
     ) {
         var playerView by remember { mutableStateOf<PlayerView?>(null) }
+        trackPanel?.let { panel ->
+            val isSubtitle = panel == TrackPanel.SUBTITLE
+            val options = tracksOf(if (isSubtitle) C.TRACK_TYPE_TEXT else C.TRACK_TYPE_AUDIO)
+            AlertDialog(
+                onDismissRequest = { trackPanel = null },
+                title = { Text(if (isSubtitle) "字幕" else "音轨") },
+                text = {
+                    Column {
+                        if (options.isEmpty()) {
+                            Text(if (isSubtitle) "此文件没有字幕轨" else "此文件没有音轨")
+                        }
+                        options.forEach { (label, group) ->
+                            TextButton(onClick = {
+                                selectTrack(group)
+                                trackPanel = null
+                            }) { Text(label) }
+                        }
+                        if (isSubtitle && options.isNotEmpty()) {
+                            TextButton(onClick = {
+                                disableSubtitles()
+                                trackPanel = null
+                            }) { Text("关闭字幕") }
+                        }
+                    }
+                },
+                confirmButton = {}
+            )
+        }
+
         if (aspectMenuOpen) {
             AlertDialog(
                 onDismissRequest = { aspectMenuOpen = false },
@@ -905,10 +983,10 @@ fun PlayerScreen(
                                 }
                             }
                         }
-                        IconButton(onClick = { showHud("字幕：外挂/内嵌") }) {
+                        IconButton(onClick = { trackPanel = TrackPanel.SUBTITLE }) {
                             Icon(Icons.Filled.Subtitles, contentDescription = "字幕", tint = Color.White)
                         }
-                        IconButton(onClick = { showHud("音轨选择") }) {
+                        IconButton(onClick = { trackPanel = TrackPanel.AUDIO }) {
                             Icon(Icons.Filled.Audiotrack, contentDescription = "音轨", tint = Color.White)
                         }
                         IconButton(onClick = { showHud("音量 ${(player.volume * 100).toInt()}%") }) {
