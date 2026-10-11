@@ -1,3 +1,4 @@
+import CoreMedia
 import SwiftUI
 
 /// Server browser for Emby-like servers and WebDAV.

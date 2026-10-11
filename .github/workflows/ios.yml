@@ -44,7 +44,11 @@ jobs:
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then
             echo "--- compiler diagnostics ---"
-            grep -E "error:|warning: .*error" xcodebuild.log | head -n 40
+            grep -E "error:" xcodebuild.log | head -n 25
+            # Also emit as annotations so the failure is readable without the raw log.
+            grep -E "error:" xcodebuild.log | head -n 12 | while IFS= read -r line; do
+              echo "::error title=build::$line"
+            done
             exit "$status"
           fi
 
