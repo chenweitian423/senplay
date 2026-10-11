@@ -50,10 +50,11 @@ def scan(sources: list[pathlib.Path], decl_re: re.Pattern, settings_ui: set[str]
     for path in sources:
         if path.name in settings_ui:
             continue
-        # A literal-bound key is read wherever the property is used, so the binding
-        # itself does not count; look for the property name afterwards.
+        # An @AppStorage literal outside the settings screen is a read: the property
+        # wrapper fetches the value from UserDefaults wherever it is used. Treating it
+        # as only a declaration made the report claim keys were dead that were wired.
         for key in IOS_LITERAL.findall(path.read_text(encoding="utf-8")):
-            live.setdefault(key, set())
+            live.setdefault(key, set()).add(path.name)
         for line in path.read_text(encoding="utf-8").splitlines():
             stripped = line.strip()
             if stripped.startswith("//") or stripped.startswith("*") or stripped.startswith("///"):

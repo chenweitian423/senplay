@@ -13,14 +13,13 @@
 
 ## 当前状态
 
-keys with a real read on iOS:     42
-keys with a real read on Android: 43
---- declared, shown in settings, read by nothing else (62) ---
+keys with a real read on iOS:     51
+keys with a real read on Android: 55
+--- declared, shown in settings, read by nothing else (46) ---
 
 ## 未生效的键
 
 - `pref.audio.backgroundAudio`（ios/android）
-- `pref.audio.firstLanguage`（android）
 - `pref.audio.globalDelayMs`（ios/android）
 - `pref.danmaku.bottomToFloat`（ios/android）
 - `pref.danmaku.convert`（ios/android）
@@ -30,21 +29,12 @@ keys with a real read on Android: 43
 - `pref.general.iCloudSync`（ios/android）
 - `pref.general.themeColor`（ios/android）
 - `pref.gesture.click`（android）
-- `pref.gesture.longPressLeftSpeed`（ios/android）
-- `pref.gesture.longPressRightSpeed`（ios/android）
 - `pref.library.preferredVersion`（ios/android）
-- `pref.library.showCast`（ios/android）
-- `pref.library.showCollection`（ios/android）
-- `pref.library.showContinue`（ios/android）
-- `pref.library.showCount`（ios/android）
-- `pref.library.showEpisodeIndicator`（ios/android）
 - `pref.library.showMine`（ios/android）
 - `pref.library.showSimilar`（ios/android）
 - `pref.list.fillThumbnail`（ios/android）
-- `pref.list.fullNameOnMenu`（ios/android）
 - `pref.list.previewPosition`（ios/android）
 - `pref.list.rounded`（ios/android）
-- `pref.list.showFolderTime`（ios/android）
 - `pref.list.showFrameRate`（ios/android）
 - `pref.list.showHDRTag`（ios/android）
 - `pref.list.showNewTag`（ios/android）
@@ -52,12 +42,9 @@ keys with a real read on Android: 43
 - `pref.list.showResolution`（ios/android）
 - `pref.list.simplifyResolution`（ios/android）
 - `pref.play.isoMode`（ios/android）
-- `pref.play.lastSpeed`（ios）
 - `pref.play.pauseAutoLock`（android）
-- `pref.play.rememberSpeed`（ios/android）
 - `pref.play.useSystemProxy`（android）
 - `pref.subtitle.bold`（ios/android）
-- `pref.subtitle.firstLanguage`（android）
 - `pref.subtitle.font`（android）
 - `pref.subtitle.hdrSubtitle`（ios/android）
 - `pref.subtitle.ignoreAss`（android）
@@ -71,16 +58,20 @@ keys with a real read on Android: 43
 - `pref.ui.controlBarStyle`（android）
 - `pref.ui.matchAspect`（ios/android）
 - `pref.ui.showCloudThrottleTip`（android）
-- `pref.ui.showOSD`（ios/android）
 - `pref.ui.showSkipTip`（android）
 - `pref.ui.showStartTitle`（android）
 - `pref.video.decodeThreads`（ios/android）
-- `pref.video.hdrMetadata`（ios/android）
 - `pref.video.hdrVivid`（ios/android）
 - `pref.video.screenshotFormat`（android）
 - `pref.video.screenshotToClipboard`（android）
 - `pref.video.switchBlackout`（android）
-- `pref.video.upscaling`（ios/android）
+
+## 已知的工具问题
+
+**Android 常量引用未被识别**。`store.prefBool(P_SOME_CONST, ...)` 形式中，常量被引用
+即算生效，但当前实现仍把它们报为未读——`ui.showSkipTip`、`ui.showStartTitle`、
+`ui.autoFullScreen` 三个键在接入后依然留在清单里。所以 Android 那一列的数字偏高，
+真实缺口比报告小。修这个之前，不要把清单当成精确的待办。
 
 ## 已接上的
 

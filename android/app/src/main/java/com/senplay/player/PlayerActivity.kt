@@ -62,6 +62,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -190,6 +193,9 @@ private const val P_PRELOAD_MODE = "play.preloadMode"
 private const val P_AUDIO_ENHANCE = "audio.enhance"
 private const val P_MULTI_CHANNEL = "audio.multiChannel"
 private const val P_SHOW_OSD = "ui.showOSD"
+private const val P_SHOW_SKIP_TIP = "ui.showSkipTip"
+private const val P_SHOW_START_TITLE = "ui.showStartTitle"
+private const val P_AUTO_FULLSCREEN = "ui.autoFullScreen"
 private const val P_REMEMBER_SPEED = "play.rememberSpeed"
 private const val P_LAST_SPEED = "play.lastSpeed"
 
@@ -256,6 +262,9 @@ fun PlayerScreen(
     val resumeFromLast = remember { store.prefBool(P_RESUME, true) }
     val autoNext = remember { store.prefBool(P_AUTO_NEXT, true) }
     val skipIntroSeconds = remember { store.prefInt(P_SKIP_INTRO, 0) }
+    val showSkipTip = remember { store.prefBool(P_SHOW_SKIP_TIP, true) }
+    val showStartTitle = remember { store.prefBool(P_SHOW_START_TITLE, true) }
+    val autoFullScreen = remember { store.prefBool(P_AUTO_FULLSCREEN, false) }
     val skipOutroSeconds = remember { store.prefInt(P_SKIP_OUTRO, 0) }
     val nextCountdown = remember { store.prefInt(P_NEXT_COUNTDOWN, 5) }
     val danmakuEnabled = remember { store.prefBool(P_DANMAKU_ENABLED, true) }
@@ -298,6 +307,20 @@ fun PlayerScreen(
                 val resume = if (startPositionMs > 0L) startPositionMs
                 else if (resumeFromLast) store.savedPosition(url) else 0L
                 if (resume > 0L) controller.seekTo(resume)
+                // "开始播放提示标题"
+                if (showStartTitle && name.isNotBlank()) {
+                    hud = name
+                }
+                // "播放视频自动进入全屏" — on a phone that means hiding the system
+                // bars, which is the only full screen this platform has.
+                if (autoFullScreen) {
+                    activity?.let { host ->
+                        WindowCompat.setDecorFitsSystemWindows(host.window, false)
+                        WindowInsetsControllerCompat(host.window, host.window.decorView)
+                            .hide(WindowInsetsCompat.Type.systemBars())
+                    }
+                }
+
                 // Restore the rate the viewer last chose, if they asked for that.
                 if (rememberSpeed && speed != 1f) {
                     controller.setPlaybackSpeed(speed)
@@ -397,13 +420,17 @@ fun PlayerScreen(
             if (skipIntroSeconds > 0 && !didSkipIntro && position > 1_000L && position < skipIntroSeconds * 1000L) {
                 didSkipIntro = true
                 player.seekTo(skipIntroSeconds * 1000L)
-                hud = "已跳过片头 ${skipIntroSeconds} 秒"
+                if (showSkipTip) hud = "已跳过片头 ${skipIntroSeconds} 秒"
             }
             if (skipOutroSeconds > 0 && !didSkipOutro && d > 0 &&
                 d - position <= skipOutroSeconds * 1000L
             ) {
                 didSkipOutro = true
-                if (autoNext) beginCountdown() else hud = "已到片尾"
+                if (autoNext) {
+                    beginCountdown()
+                } else if (showSkipTip) {
+                    hud = "已到片尾"
+                }
             }
             if (player.playbackState == Player.STATE_ENDED) {
                 isPlaying = false
