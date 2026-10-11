@@ -29,6 +29,9 @@ IOS_DECL = re.compile(r'static let (\w+) = "([^"]+)"')
 # @AppStorage("pref.x") names a key inline rather than through PrefKey.
 IOS_LITERAL = re.compile(r'@AppStorage\("([^"]+)"\)')
 ANDROID_DECL = re.compile(r'private const val (P_\w+) = "([^"]+)"')
+# A key can also be named inline at the call site, with no constant at all. Missing
+# these made the audit report three times that fewer keys were dead than really were.
+ANDROID_INLINE = re.compile(r'(?:set)?[Pp]ref(?:Bool|Int|Float|String)\("([^"]+)"')
 ANDROID_ROW = re.compile(r'Pref(?:Switch|Choice|Slider|Text)\(\s*store,\s*"([^"]+)"')
 
 
@@ -70,6 +73,14 @@ def android_live() -> dict[str, set[str]]:
     base = ROOT / "android" / "app" / "src" / "main" / "java" / "com" / "senplay"
     sources = sorted(base.rglob("*.kt"))
     live = scan(sources, ANDROID_DECL, ANDROID_SETTINGS_UI)
+
+    # Inline-named keys: declared by the call that reads them, so the read is the
+    # declaration. They are live by definition.
+    for path in sources:
+        if path.name in ANDROID_SETTINGS_UI:
+            continue
+        for key in ANDROID_INLINE.findall(path.read_text(encoding="utf-8")):
+            live.setdefault("pref." + key, set()).add(path.name)
 
     # Keys written only as a literal in a settings row, with no constant at all.
     declared_literals: dict[str, str] = {}

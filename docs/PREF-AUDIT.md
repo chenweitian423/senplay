@@ -7,11 +7,15 @@
 保留这些键是为了与参考实现的偏好集合保持一致（目标要求双端键串对齐），但**设置页上存在
 不等于功能存在**。这份清单是已知的表面差距。
 
+> 这个工具本身出过三次错，每次都让报告比真相乐观：漏掉 `@AppStorage` 字面量（于是只说
+> Android 有问题）、漏掉调用点直接写名字的键（于是上一批修复完全没体现出来）。改动判据后
+> 应先核对一个已知的死键是否仍被判为死键，再看总数。
+
 ## 当前状态
 
 keys with a real read on iOS:     42
-keys with a real read on Android: 31
---- declared, shown in settings, read by nothing else (72) ---
+keys with a real read on Android: 43
+--- declared, shown in settings, read by nothing else (62) ---
 
 ## 未生效的键
 
@@ -34,28 +38,18 @@ keys with a real read on Android: 31
 - `pref.library.showContinue`（ios/android）
 - `pref.library.showCount`（ios/android）
 - `pref.library.showEpisodeIndicator`（ios/android）
-- `pref.library.showMediaInfo`（ios/android）
 - `pref.library.showMine`（ios/android）
-- `pref.library.showPlayedMark`（ios/android）
-- `pref.library.showRating`（ios/android）
-- `pref.library.showRemaining`（ios/android）
 - `pref.library.showSimilar`（ios/android）
-- `pref.library.titleAlignment`（ios/android）
-- `pref.list.ellipsis`（ios/android）
 - `pref.list.fillThumbnail`（ios/android）
 - `pref.list.fullNameOnMenu`（ios/android）
 - `pref.list.previewPosition`（ios/android）
 - `pref.list.rounded`（ios/android）
-- `pref.list.showCount`（ios/android）
-- `pref.list.showDuration`（ios/android）
 - `pref.list.showFolderTime`（ios/android）
 - `pref.list.showFrameRate`（ios/android）
 - `pref.list.showHDRTag`（ios/android）
 - `pref.list.showNewTag`（ios/android）
 - `pref.list.showPreview`（ios/android）
-- `pref.list.showProgress`（ios/android）
 - `pref.list.showResolution`（ios/android）
-- `pref.list.showSize`（ios/android）
 - `pref.list.simplifyResolution`（ios/android）
 - `pref.play.isoMode`（ios/android）
 - `pref.play.lastSpeed`（ios）
@@ -91,17 +85,22 @@ keys with a real read on Android: 31
 ## 已接上的
 
 - `pref.gesture.longPressSpeed`：屏幕长按速率，此前硬编码 2x。
-- `pref.list.showSize` / `showDuration` / `showProgress` / `showCount` / `ellipsis`：
-  服务器浏览列表的条目行现在按这些开关组装副标题与进度条，双端一致。
+- 列表组：`list.showSize` / `showDuration` / `showProgress` / `showCount` / `ellipsis`，
+  服务器浏览列表的条目行按这些开关组装副标题与进度条。
+- 海报组：`library.showPlayedMark` / `showRating` / `showRemaining` / `showMediaInfo` /
+  `titleAlignment`，海报墙上的角标与信息行。
 
-## 说明
+## 剩余部分属于哪一类
 
-- **一部分键不是「没接 UI」，而是数据源里根本没有**。`MediaEntry` 携带 size、时长、
-  播放位置与看完状态，但没有分辨率、帧率、HDR 标记、添加时间——协议层从未取回它们。
-  要接 `pref.list.showResolution` 这类开关，得先扩展 Emby/Plex 的元数据映射。
-- `pref.subtitle.ignoreAss` / `ignoreSrt`：ASS 样式由内核的 libass 渲染，样式来自文件本身，
-  这一层没有可干预的开关。
-- `pref.gesture.longPressLeftSpeed` / `longPressRightSpeed`：区分左右方向键长按需要遥控器或
-  外接键盘的重复事件，两端当前都没有处理。
-- 语言偏好（`pref.audio.firstLanguage` / `pref.subtitle.firstLanguage`）需要传给内核的
-  字幕与音轨选择逻辑，尚未接。
+**数据源里根本没有**：`library.showCast` / `showSimilar` / `preferredVersion` 需要演员表、
+相似推荐、多版本选择，协议层从未取回；`library.showEpisodeIndicator` 需要 Emby 载荷里的集号；
+`list.showResolution` / `showFrameRate` / `showHDRTag` / `showNewTag` / `showFolderTime` 同理。
+接这些要先扩 Emby/Plex 的元数据映射，不是 UI 工作。
+
+**当前内核下无落点**：`subtitle.ignoreAss` / `ignoreSrt`（ASS 样式由 libass 从文件渲染）、
+`gesture.longPressLeftSpeed` / `longPressRightSpeed`（需要遥控器或外接键盘的按键重复事件）。
+
+**尚未接线**：语言偏好（`audio.firstLanguage` / `subtitle.firstLanguage`）需要传给内核的
+字幕与音轨选择；音频组（`audio.enhance` / `globalDelayMs` / `rememberTrack` / `multiChannel`）
+需要接到播放器的音频处理链；`general.themeColor` / `defaultModule` / `iCloudSync` 需要主题系统
+与模块入口；板块可见性（`library.showContinue` / `showCollection`）需要在板块枚举处过滤。
