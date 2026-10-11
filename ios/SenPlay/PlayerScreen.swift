@@ -1148,6 +1148,12 @@ struct PlayerScreen: View {
         options.isAccurateSeek = accurateSeek
         options.hardwareDecode = preferHardwareDecode
         options.userAgent = request.userAgent ?? "SenPlay/1.1 (iOS)"
+        // Server-issued headers (Emby's X-Emby-Authorization, referers) go in through
+        // the kernel's own header channel so they reach both the AVFoundation and the
+        // FFmpeg paths.
+        if !request.headers.isEmpty {
+            options.appendHeader(request.headers)
+        }
         options.registerRemoteControll = true
         options.autoSelectEmbedSubtitle = true
         options.isSeekedAutoPlay = true

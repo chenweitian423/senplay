@@ -42,7 +42,7 @@ data class DiscoveredService(
 
     val kindHint: String
         get() {
-            val lower = name.lowercased()
+            val lower = name.lowercase()
             return when {
                 lower.contains("jellyfin") -> "Jellyfin"
                 lower.contains("emby") -> "Emby"

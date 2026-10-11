@@ -23,8 +23,42 @@ data class MediaEntry(
     val childCount: Int = 0,
     val durationTicks: Long = 0L,
     val played: Boolean = false,
+    /** Server-reported resume position, used by the poster wall and resume strip. */
+    val positionMs: Long = 0L,
+    val overview: String? = null,
+    val year: Int? = null,
+    val rating: Double? = null,
     val imageUrl: String? = null
-)
+) {
+    val durationMs: Long get() = durationTicks / 10_000L
+
+    /** Fraction played, or 0 when the server reported nothing. */
+    val progress: Float
+        get() = when {
+            durationMs > 0 -> (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+            else -> 0f
+        }
+
+    val subtitle: String
+        get() = buildList {
+            year?.let { add(it.toString()) }
+            rating?.takeIf { it > 0 }?.let { add(String.format("%.1f", it)) }
+            if (size > 0) add("${size / 1024 / 1024} MB")
+            if (durationMs > 0) add(timecode(durationMs))
+        }.joinToString(" · ")
+
+    companion object {
+        fun timecode(ms: Long): String {
+            if (ms <= 0) return ""
+            val total = ms / 1000
+            val h = total / 3600
+            val m = (total % 3600) / 60
+            val s = total % 60
+            return if (h > 0) String.format("%d:%02d:%02d", h, m, s)
+            else "${m} 分 ${String.format("%02d", s)} 秒"
+        }
+    }
+}
 
 data class UrlListItem(val url: String, val name: String, val userAgent: String? = null)
 

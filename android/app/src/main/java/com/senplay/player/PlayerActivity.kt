@@ -256,6 +256,10 @@ fun PlayerScreen(
             }
     }
 
+    fun showHud(text: String) {
+        hud = text
+    }
+
     fun advanceToNext(next: Pair<String, String>) {
         upNext = null
         countdown = 0
@@ -356,10 +360,6 @@ fun PlayerScreen(
         player.seekTo(target)
         position = target
         hud = if (deltaSeconds >= 0) "+${deltaSeconds}s" else "${deltaSeconds}s"
-    }
-
-    fun showHud(text: String) {
-        hud = text
     }
 
     Box(

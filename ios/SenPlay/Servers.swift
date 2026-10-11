@@ -182,17 +182,54 @@ final class EmbyClient {
         try await items(parentId: nil, includeTypes: "CollectionFolder,Folder,UserView")
     }
 
-    func items(parentId: String?, includeTypes: String = "Folder,Movie,Episode,Series,Video") async throws -> [MediaEntry] {
+    enum SortBy: String, CaseIterable, Identifiable {
+        case name = "SortName"
+        case dateAdded = "DateCreated"
+        case year = "ProductionYear"
+        case rating = "CommunityRating"
+        case runtime = "Runtime"
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .name: return "名称"
+            case .dateAdded: return "加入时间"
+            case .year: return "年份"
+            case .rating: return "评分"
+            case .runtime: return "时长"
+            }
+        }
+    }
+
+    func items(
+        parentId: String?,
+        includeTypes: String = "Folder,Movie,Episode,Series,Video",
+        sortBy: SortBy = .name,
+        ascending: Bool = true,
+        recursive: Bool = false,
+        searchTerm: String? = nil,
+        filters: [String] = [],
+        limit: Int? = nil
+    ) async throws -> [MediaEntry] {
         var components = URLComponents(string: Urls.join(server.address, "/Users/\(userId)/Items"))!
-        var items: [URLQueryItem] = [
+        var query: [URLQueryItem] = [
             URLQueryItem(name: "IncludeItemTypes", value: includeTypes),
-            URLQueryItem(name: "Recursive", value: "false"),
-            URLQueryItem(name: "SortBy", value: "SortName"),
-            URLQueryItem(name: "Fields", value: "Path,MediaSources,RunTimeTicks"),
+            URLQueryItem(name: "Recursive", value: recursive ? "true" : "false"),
+            URLQueryItem(name: "SortBy", value: sortBy.rawValue),
+            URLQueryItem(name: "SortOrder", value: ascending ? "Ascending" : "Descending"),
+            URLQueryItem(name: "Fields", value: "Path,MediaSources,RunTimeTicks,Overview,ProductionYear,CommunityRating,UserData"),
+            URLQueryItem(name: "ImageTypeLimit", value: "1"),
+            URLQueryItem(name: "EnableImageTypes", value: "Primary,Backdrop,Thumb"),
             URLQueryItem(name: "api_key", value: accessToken)
         ]
-        if let parentId { items.append(URLQueryItem(name: "ParentId", value: parentId)) }
-        components.queryItems = items
+        if let parentId { query.append(URLQueryItem(name: "ParentId", value: parentId)) }
+        if let searchTerm, !searchTerm.isEmpty {
+            query.append(URLQueryItem(name: "SearchTerm", value: searchTerm))
+        }
+        if !filters.isEmpty {
+            query.append(URLQueryItem(name: "Filters", value: filters.joined(separator: ",")))
+        }
+        if let limit { query.append(URLQueryItem(name: "Limit", value: String(limit))) }
+        components.queryItems = query
 
         var request = URLRequest(url: components.url!)
         request.setValue(authHeader, forHTTPHeaderField: "X-Emby-Authorization")
@@ -204,23 +241,70 @@ final class EmbyClient {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let rawItems = json["Items"] as? [[String: Any]] else { return [] }
 
-        return rawItems.compactMap { item in
-            guard let id = item["Id"] as? String else { return nil }
-            let type = item["Type"] as? String ?? ""
-            let folderLike = ["Folder", "Series", "CollectionFolder", "UserView", "Season"].contains(type)
-            return MediaEntry(
-                name: item["Name"] as? String ?? id,
-                url: id,
-                isDirectory: folderLike,
-                size: 0,
-                entryId: id,
-                imageURL: Urls.join(server.address, "/Items/\(id)/Images/Primary?maxHeight=320&api_key=\(accessToken)")
-            )
+        return rawItems.compactMap { Self.entry(from: $0, server: server, token: accessToken) }
+    }
+
+    /// "继续观看": items the server reports as partially played, newest first.
+    func resume(limit: Int = 30) async throws -> [MediaEntry] {
+        var components = URLComponents(string: Urls.join(server.address, "/Users/\(userId)/Items/Resume"))!
+        components.queryItems = [
+            URLQueryItem(name: "Recursive", value: "true"),
+            URLQueryItem(name: "MediaTypes", value: "Video"),
+            URLQueryItem(name: "Limit", value: String(limit)),
+            URLQueryItem(name: "Fields", value: "Path,MediaSources,RunTimeTicks,UserData"),
+            URLQueryItem(name: "api_key", value: accessToken)
+        ]
+
+        var request = URLRequest(url: components.url!)
+        request.setValue(authHeader, forHTTPHeaderField: "X-Emby-Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            throw ServerError.http(http.statusCode)
         }
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let rawItems = json["Items"] as? [[String: Any]] else { return [] }
+
+        return rawItems.compactMap { Self.entry(from: $0, server: server, token: accessToken) }
+    }
+
+    /// Recently added, for the "最新" strip.
+    func latest(limit: Int = 30) async throws -> [MediaEntry] {
+        try await items(parentId: nil, includeTypes: "Movie,Episode,Video",
+                        sortBy: .dateAdded, ascending: false, recursive: true, limit: limit)
+    }
+
+    static func entry(from item: [String: Any], server: ServerConfig, token: String) -> MediaEntry? {
+        guard let id = item["Id"] as? String else { return nil }
+        let type = item["Type"] as? String ?? ""
+        let folderLike = ["Folder", "Series", "CollectionFolder", "UserView", "Season", "BoxSet"].contains(type)
+        let userData = item["UserData"] as? [String: Any] ?? [:]
+        let played = userData["Played"] as? Bool ?? false
+        let positionTicks = userData["PlaybackPositionTicks"] as? Double ?? 0
+        let runTicks = item["RunTimeTicks"] as? Double ?? 0
+        return MediaEntry(
+            name: item["Name"] as? String ?? id,
+            url: id,
+            isDirectory: folderLike,
+            size: 0,
+            entryId: id,
+            imageURL: Urls.join(server.address, "/Items/\(id)/Images/Primary?maxHeight=400&api_key=\(token)"),
+            isPlayed: played,
+            positionMs: positionTicks / 10_000,
+            durationMs: runTicks / 10_000,
+            overview: item["Overview"] as? String,
+            year: item["ProductionYear"] as? Int,
+            rating: item["CommunityRating"] as? Double
+        )
     }
 
     func streamURL(for entry: MediaEntry) -> String {
         Urls.join(server.address, "/Videos/\(entry.entryId ?? "")/stream?static=true&api_key=\(accessToken)")
+    }
+
+    /// Headers the player needs so the server authorises the media request.
+    func mediaHeaders() -> [String: String] {
+        ["X-Emby-Authorization": authHeader]
     }
 }
 
