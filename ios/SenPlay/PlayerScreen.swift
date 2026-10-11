@@ -543,6 +543,9 @@ struct PlayerScreen: View {
     @AppStorage("pref.subtitle.firstLanguage") private var preferredSubtitleLanguage = ""
     @AppStorage("pref.danmaku.keywords") private var danmakuKeywordText = ""
     @AppStorage("pref.danmaku.bottomToFloat") private var bottomToFloat = false
+    /// Declared here as well as in the settings screen: a preference is read where it
+    /// is used, and the two views do not share storage declarations.
+    @AppStorage(PrefKey.screenshotToClipboard) private var screenshotToClipboard = true
     @AppStorage("pref.gesture.longPressLeftSpeed") private var longPressLeftSpeed = 0.5
     @AppStorage("pref.gesture.longPressRightSpeed") private var longPressRightSpeed = 2.0
     @State private var hud: PlayerHUD?
@@ -860,7 +863,7 @@ struct PlayerScreen: View {
                         Button { seek(by: Double(forwardSeconds)) } label: { Image(systemName: "goforward.15") }
                     }
                     if switchMediaButton {
-                        Button { toast = "切换媒体"; scheduleToastClear() } label: {
+                        Button { switchToNextMedia() } label: {
                             Image(systemName: "rectangle.stack")
                         }
                     }
@@ -1287,6 +1290,23 @@ struct PlayerScreen: View {
             queue: request.queue
         )
         onPlayNext?(seeded)
+    }
+
+    /// Moves to the next item in the queue, if there is one.
+    ///
+    /// Distinct from `beginCountdown`, which waits for the current item to finish;
+    /// this is the viewer asking to move on now. Both end up in the same `advance`,
+    /// so the resume position and the queue carry over the same way.
+    private func switchToNextMedia() {
+        let queue = request.queue
+        guard let index = queue.firstIndex(where: { $0.url == request.url }),
+              index + 1 < queue.count else {
+            toast = "队列中没有下一个"
+            scheduleToastClear()
+            return
+        }
+        upNext = queue[index + 1]
+        advance()
     }
 
     private func togglePlayPause() {
