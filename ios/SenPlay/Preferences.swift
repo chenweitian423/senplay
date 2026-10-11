@@ -195,6 +195,7 @@ private struct LibraryPrefs: View {
     @AppStorage("pref.library.showCount") private var showCount = true
     @AppStorage("pref.library.showCollection") private var showCollection = false
     @AppStorage("pref.library.hidePlayedInLatest") private var hidePlayedInLatest = false
+    @AppStorage("pref.library.displayPlayButton") private var displayPlayButton = true
     @AppStorage("pref.library.preferredVersion") private var preferredVersion = "default"
     @AppStorage("pref.library.titleAlignment") private var titleAlignment = "left"
     @AppStorage("pref.library.showRating") private var showRating = true
@@ -217,6 +218,7 @@ private struct LibraryPrefs: View {
                 Toggle("显示媒体数量", isOn: $showCount)
                 Toggle("列表中显示合集", isOn: $showCollection)
                 Toggle("最新中隐藏已播放", isOn: $hidePlayedInLatest)
+                Toggle("封面上显示播放按钮", isOn: $displayPlayButton)
                 Picker("视频首选版本", selection: $preferredVersion) {
                     Text("默认").tag("default")
                 }

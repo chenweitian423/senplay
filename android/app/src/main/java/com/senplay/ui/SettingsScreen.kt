@@ -101,6 +101,7 @@ fun SettingsScreen(store: LibraryStore) {
         PrefSwitch(store, "library.showCount", "显示媒体数量", null, true)
         PrefSwitch(store, "library.showCollection", "列表中显示合集", null, false)
         PrefSwitch(store, "library.hidePlayedInLatest", "最新中隐藏已播放", null, false)
+        PrefSwitch(store, "library.displayPlayButton", "封面上显示播放按钮", null, true)
         PrefChoice(store, "library.preferredVersion", "视频首选版本", listOf("default" to "默认"), "default")
         PrefChoice(
             store, "library.titleAlignment", "名称对齐方式",

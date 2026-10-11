@@ -46,6 +46,10 @@ private struct ListDisplay {
     var showCollection = false
     /// "最新中隐藏已播放"
     var hidePlayedInLatest = false
+    /// "封面上显示播放按钮". The reference app exposes it as `kEmbyDisplayPlayButton`;
+    /// the settings screen it belongs to is not in the spec, so the default follows
+    /// the rest of the artwork group, which is on.
+    var showPlayButton = true
 
     init(_ defaults: UserDefaults = .standard) {
         showSize = defaults.object(forKey: "pref.list.showSize") as? Bool ?? true
@@ -74,6 +78,8 @@ private struct ListDisplay {
         showCollection = defaults.object(forKey: "pref.library.showCollection") as? Bool ?? false
         hidePlayedInLatest =
             defaults.object(forKey: "pref.library.hidePlayedInLatest") as? Bool ?? false
+        showPlayButton =
+            defaults.object(forKey: "pref.library.displayPlayButton") as? Bool ?? true
     }
 }
 
@@ -296,6 +302,17 @@ struct ServerBrowserView: View {
             VStack(alignment: .leading, spacing: 6) {
                 ZStack(alignment: .bottomLeading) {
                     posterImage(entry)
+                    // Nested inside the cell's own Button, so this is a gesture rather
+                    // than a Button — a Button here would be swallowed by the outer one.
+                    if display.showPlayButton, !entry.isDirectory {
+                        Image(systemName: "play.circle.fill")
+                            .font(.system(size: 30))
+                            .foregroundColor(.white.opacity(0.9))
+                            .shadow(radius: 3)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .contentShape(Circle())
+                            .onTapGesture { open(entry) }
+                    }
                     if display.showProgress, entry.progress > 0 {
                         progressBar(entry.progress)
                     }

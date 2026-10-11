@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.Delete
@@ -663,6 +664,12 @@ private class ListDisplay(store: LibraryStore) {
     val showCollection = store.prefBool("library.showCollection", false)
     /** "最新中隐藏已播放" filters inside the strip rather than hiding it. */
     val hidePlayedInLatest = store.prefBool("library.hidePlayedInLatest", false)
+    /**
+     * "封面上显示播放按钮". The reference app exposes it as `kEmbyDisplayPlayButton`;
+     * the settings screen it belongs to is not in the spec, so the default follows
+     * the rest of the artwork group, which is on.
+     */
+    val showPlayButton = store.prefBool("library.displayPlayButton", true)
     val showContinue = store.prefBool("library.showContinue", true)
 
     /**
@@ -816,6 +823,18 @@ private fun PosterCell(entry: MediaEntry, display: ListDisplay, onClick: () -> U
                 Icon(
                     if (entry.isDirectory) Icons.Filled.Folder else Icons.Filled.Movie,
                     contentDescription = null
+                )
+            }
+            // Nested clickable inside the cell's own clickable: the inner one wins
+            // for taps that land on it, which is the whole point of the button.
+            if (display.showPlayButton && !entry.isDirectory) {
+                Icon(
+                    Icons.Filled.PlayCircle,
+                    contentDescription = "播放",
+                    tint = Color.White.copy(alpha = 0.9f),
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clickable { onClick() }
                 )
             }
             if (display.showProgress && entry.progress > 0f) {
