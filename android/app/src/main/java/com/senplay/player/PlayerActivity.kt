@@ -205,6 +205,7 @@ private const val P_AUTO_FULLSCREEN = "ui.autoFullScreen"
 private const val P_DANMAKU_KEYWORDS = "danmaku.keywords"
 private const val P_DANMAKU_BOTTOM_FLOAT = "danmaku.bottomToFloat"
 private const val P_SCREENSHOT_TO_CLIPBOARD = "video.screenshotToClipboard"
+private const val P_BACKGROUND_AUDIO = "audio.backgroundAudio"
 
 /**
  * The same three modes the iOS side offers, mapped onto the view's own resize modes
@@ -293,6 +294,7 @@ fun PlayerScreen(
     val screenshotToClipboard = remember {
         store.prefBool(P_SCREENSHOT_TO_CLIPBOARD, true)
     }
+    val backgroundAudio = remember { store.prefBool(P_BACKGROUND_AUDIO, false) }
     val floatingControls = remember {
         store.prefString("ui.controlBarStyle", "bottom") == "floating"
     }
@@ -743,6 +745,19 @@ fun PlayerScreen(
                 },
                 confirmButton = {}
             )
+        }
+
+        // "后台音频" off means the sound stops when the app leaves the foreground.
+        // The service keeps playing otherwise, which is what the switch is about.
+        DisposableEffect(backgroundAudio) {
+            val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP && !backgroundAudio) {
+                    player.pause()
+                }
+            }
+            val owner = (context as? androidx.lifecycle.LifecycleOwner)
+            owner?.lifecycle?.addObserver(observer)
+            onDispose { owner?.lifecycle?.removeObserver(observer) }
         }
 
         if (castOpen) {

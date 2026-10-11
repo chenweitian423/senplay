@@ -183,3 +183,32 @@ keys with a real read on Android: 54
 
 **核对了没问题的**：`SchemeRoutingDataSourceFactory` 确实路由了 smb / ftp / sftp 三种
 scheme，`PlaybackService` 用的是它。
+
+## 最后一次分类核对（round 40）
+
+收尾时把 30 个未读键逐个过了一遍，**修正了一处过宽的分类**：此前把「后台音频」
+归进了「内核无落点」，实际不是——后台播放是实现了的（iOS 的
+`UIBackgroundModes: audio`、Android 的 `MediaSessionService`），缺的只是**开关没接线**。
+已接上：iOS 监听 `didEnterBackgroundNotification`，Android 监听 `ON_STOP`，两处在
+开关关闭时暂停。
+
+核对同时确认了这些**确实是「无落点」而不是「没接线」**：
+
+- `subtitle.font`：两端都没有自定义字幕字体的接口。检查过 `FontFamily.Monospace`
+  那几处，是 OSD 的等宽字体，与字幕无关。
+- 字幕样式一组（`bold` / `italic` / `outlineWidth` / `shadowWidth` / `ratioFix` /
+  `hdrSubtitle` / `ignoreAss` / `ignoreSrt`）：libass 与 Media3 的 `SubtitleView` 都从
+  字幕文件取样式。
+- `gesture.longPressLeftSpeed` / `longPressRightSpeed`：需要按键重复事件。
+- `ui.matchAspect`：桌面窗口概念，移动端没有可对齐的窗口比例。
+
+**仍然是「没接线」的**（不是无落点，是待办）：`list.fillThumbnail` / `showPreview` /
+`previewPosition` / `showNewTag`、`general.defaultModule` / `iCloudSync`、
+`video.switchBlackout` / `screenshotFormat` / `decodeThreads` / `hdrVivid`、
+`danmaku.convert` / `font`、`gesture.click`、`ui.showCloudThrottleTip`、
+`play.isoMode` / `pauseAutoLock` / `useSystemProxy`、`audio.globalDelayMs`、
+`library.preferredVersion` / `showMine`。
+
+**这三类混在一起的后果**：把它们都叫「未完成」会让剩下的工作看起来比实际大，也会
+让真正无落点的那些被反复重新评估。每次核对都要重新判断一遍某个键属于哪一类，这就是
+这份文档存在的理由。

@@ -543,6 +543,7 @@ struct PlayerScreen: View {
     @AppStorage("pref.audio.firstLanguage") private var preferredAudioLanguage = ""
     @AppStorage("pref.subtitle.firstLanguage") private var preferredSubtitleLanguage = ""
     @AppStorage("pref.danmaku.keywords") private var danmakuKeywordText = ""
+    @AppStorage("pref.audio.backgroundAudio") private var backgroundAudio = false
     @AppStorage("pref.danmaku.bottomToFloat") private var bottomToFloat = false
     /// Declared here as well as in the settings screen: a preference is read where it
     /// is used, and the two views do not share storage declarations.
@@ -670,6 +671,11 @@ struct PlayerScreen: View {
             }
         }
         .statusBar(hidden: true)
+        .onReceive(NotificationCenter.default.publisher(
+            for: UIApplication.didEnterBackgroundNotification
+        )) { _ in
+            pauseIfBackgroundAudioDisabled()
+        }
         .onAppear(perform: start)
         .onDisappear(perform: finish)
         // Polled once a second: the kernel publishes on every frame, and the overlay
@@ -1318,6 +1324,17 @@ struct PlayerScreen: View {
         }
         upNext = queue[index + 1]
         advance()
+    }
+
+    /// "后台音频" off means the sound stops when the app leaves the foreground.
+    ///
+    /// The kernel activates a playback session on its own, so the switch is enforced
+    /// here rather than by withholding a configuration: leaving the foreground is the
+    /// moment it matters, and that is a scene event, not a playback one.
+    private func pauseIfBackgroundAudioDisabled() {
+        guard !backgroundAudio, kernel != nil else { return }
+        kernel?.pause()
+        isPlaying = false
     }
 
     private func togglePlayPause() {
