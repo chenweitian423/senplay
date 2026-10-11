@@ -132,6 +132,7 @@ struct ServerBrowserView: View {
             strip = first
         }
     }
+    @State private var detailEntry: MediaEntry?
     @State private var path = ""
     @State private var parentId: String? = nil
     @State private var stack: [(String, String?)] = []
@@ -163,6 +164,14 @@ struct ServerBrowserView: View {
 
     var body: some View {
         content
+            .sheet(item: $detailEntry) { item in
+                if let client = emby {
+                    DetailScreen(entry: item, client: client) { chosen in
+                        detailEntry = nil
+                        play(chosen)
+                    }
+                }
+            }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarContent }
@@ -555,7 +564,14 @@ struct ServerBrowserView: View {
         )
     }
 
+    /// Emby items open a detail page; everything else plays directly, because a
+    /// plain file on a share has nothing to show a page about.
     private func open(_ entry: MediaEntry) {
+        if isEmbyLike, !entry.isDirectory, let client = emby {
+            detailEntry = entry
+            _ = client
+            return
+        }
         if strip == .collections, collectionId == nil, entry.isDirectory {
             collectionId = entry.entryId ?? entry.url
             scheduleReload()

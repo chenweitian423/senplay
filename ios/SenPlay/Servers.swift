@@ -247,6 +247,52 @@ final class EmbyClient {
         return rawItems.compactMap { Self.entry(from: $0, server: server, token: accessToken) }
     }
 
+    /// One item's full record. The list endpoints already return most of this, but a
+    /// detail view wants the fields the list has no room for, and asking for them by
+    /// id means a stale list entry cannot show stale data.
+    func item(id: String) async throws -> MediaEntry? {
+        var components = URLComponents(string: Urls.join(server.address, "/Users/\(userId)/Items/\(id)"))!
+        components.queryItems = [
+            URLQueryItem(name: "Fields", value: "Path,MediaSources,RunTimeTicks,Overview,ProductionYear,CommunityRating,UserData,DateModified,People,Genres,Studios,Tags"),
+            URLQueryItem(name: "api_key", value: accessToken)
+        ]
+        var request = URLRequest(url: components.url!)
+        request.setValue(authHeader, forHTTPHeaderField: "X-Emby-Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            throw ServerError.http(http.statusCode)
+        }
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        return Self.entry(from: json, server: server, token: accessToken)
+    }
+
+    /// "显示类似作品". Emby's own similarity, which weights genre, people and tags —
+    /// reproducing that ranking locally would be guesswork.
+    func similar(id: String, limit: Int = 12) async throws -> [MediaEntry] {
+        var components = URLComponents(
+            string: Urls.join(server.address, "/Items/\(id)/Similar")
+        )!
+        components.queryItems = [
+            URLQueryItem(name: "UserId", value: userId),
+            URLQueryItem(name: "Limit", value: String(limit)),
+            URLQueryItem(name: "Fields", value: "Path,MediaSources,RunTimeTicks,Overview,ProductionYear,CommunityRating,UserData"),
+            URLQueryItem(name: "api_key", value: accessToken)
+        ]
+        var request = URLRequest(url: components.url!)
+        request.setValue(authHeader, forHTTPHeaderField: "X-Emby-Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            throw ServerError.http(http.statusCode)
+        }
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let rawItems = json["Items"] as? [[String: Any]] else { return [] }
+        return rawItems.compactMap { Self.entry(from: $0, server: server, token: accessToken) }
+    }
+
     /// "继续观看": items the server reports as partially played, newest first.
     /// Box sets: the server-side groupings that behave as collections.
     func collections(parentId: String? = nil) async throws -> [MediaEntry] {
