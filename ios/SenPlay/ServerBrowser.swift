@@ -48,85 +48,99 @@ struct ServerBrowserView: View {
     private let columns = [GridItem(.adaptive(minimum: 118), spacing: 12)]
 
     var body: some View {
-        Group {
-            if loading && entries.isEmpty {
-                ProgressView("载入中…")
-            } else {
-                ScrollView {
-                    if let errorText {
-                        Text("错误：\(errorText)")
-                            .font(.footnote)
-                            .foregroundColor(.red)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 16)
-                    }
-                    if entries.isEmpty && !loading {
-                        Text(isEmbyLike ? "这个位置没有内容。" : "空目录。")
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(16)
-                    }
-                    if layout == .grid {
-                        LazyVGrid(columns: columns, spacing: 14) {
-                            ForEach(visibleEntries) { entry in
-                                posterCell(entry)
-                            }
+        content
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { toolbarContent }
+            .searchable(text: $search, prompt: "搜索")
+            .onChange(of: strip) { _ in handleStripChange() }
+            .onChange(of: sortBy) { _ in scheduleReload() }
+            .onChange(of: ascending) { _ in scheduleReload() }
+            .task { await reload() }
+    }
+
+    /// Split out of `body` on purpose: keeping this chain inline made the type
+    /// checker give up on the whole expression.
+    @ViewBuilder
+    private var content: some View {
+        if loading && entries.isEmpty {
+            ProgressView("载入中…")
+        } else {
+            ScrollView {
+                if let errorText {
+                    Text("错误：\(errorText)")
+                        .font(.footnote)
+                        .foregroundColor(.red)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16)
+                }
+                if entries.isEmpty && !loading {
+                    Text(isEmbyLike ? "这个位置没有内容。" : "空目录。")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                }
+                if layout == .grid {
+                    LazyVGrid(columns: columns, spacing: 14) {
+                        ForEach(visibleEntries) { entry in
+                            posterCell(entry)
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.top, 8)
-                    } else {
-                        LazyVStack(spacing: 0) {
-                            ForEach(visibleEntries) { entry in
-                                rowCell(entry)
-                                Divider().padding(.leading, 16)
-                            }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+                } else {
+                    LazyVStack(spacing: 0) {
+                        ForEach(visibleEntries) { entry in
+                            rowCell(entry)
+                            Divider().padding(.leading, 16)
                         }
                     }
                 }
             }
         }
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItemGroup(placement: .navigationBarTrailing) {
-                if isEmbyLike {
-                    Menu {
-                        Picker("板块", selection: $strip) {
-                            ForEach(Strip.allCases) { Text($0.title).tag($0) }
-                        }
-                        Divider()
-                        Picker("排序", selection: $sortBy) {
-                            ForEach(EmbyClient.SortBy.allCases) { Text($0.title).tag($0) }
-                        }
-                        Toggle("升序", isOn: $ascending)
-                    } label: {
-                        Image(systemName: "line.3.horizontal.decrease.circle")
+    }
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItemGroup(placement: .navigationBarTrailing) {
+            if isEmbyLike {
+                Menu {
+                    Picker("板块", selection: $strip) {
+                        ForEach(Strip.allCases) { Text($0.title).tag($0) }
                     }
-                }
-                Button {
-                    layout = layout == .grid ? .list : .grid
+                    Divider()
+                    Picker("排序", selection: $sortBy) {
+                        ForEach(EmbyClient.SortBy.allCases) { Text($0.title).tag($0) }
+                    }
+                    Toggle("升序", isOn: $ascending)
                 } label: {
-                    Image(systemName: layout == .grid ? "list.bullet" : "square.grid.2x2")
+                    Image(systemName: "line.3.horizontal.decrease.circle")
                 }
             }
-            if !stack.isEmpty, isEmbyLike == false || strip == .files {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("< 上一级") { goUp() }
-                }
+            Button {
+                layout = layout == .grid ? .list : .grid
+            } label: {
+                Image(systemName: layout == .grid ? "list.bullet" : "square.grid.2x2")
             }
         }
-        .searchable(text: $search, prompt: "搜索")
-        .onChange(of: strip) { _ in
-            guard isEmbyLike else { return }
-            stack = []
-            path = ""
-            parentId = nil
-            Task { await reload() }
+        ToolbarItem(placement: .navigationBarLeading) {
+            if !stack.isEmpty {
+                Button("< 上一级") { goUp() }
+            }
         }
-        .onChange(of: sortBy) { _ in Task { await reload() } }
-        .onChange(of: ascending) { _ in Task { await reload() } }
-        .task { await reload() }
+    }
+
+    private func handleStripChange() {
+        guard isEmbyLike else { return }
+        stack = []
+        path = ""
+        parentId = nil
+        scheduleReload()
+    }
+
+    private func scheduleReload() {
+        Task { await reload() }
     }
 
     private var title: String {
@@ -149,13 +163,7 @@ struct ServerBrowserView: View {
                 ZStack(alignment: .bottomLeading) {
                     posterImage(entry)
                     if entry.progress > 0 {
-                        GeometryReader { geo in
-                            Rectangle()
-                                .fill(Color.accentColor)
-                                .frame(width: geo.size.width * entry.progress, height: 3)
-                                .frame(maxHeight: .infinity, alignment: .bottom)
-                        }
-                        .frame(height: 3)
+                        progressBar(entry.progress)
                     }
                 }
                 Text(entry.name)
@@ -171,6 +179,17 @@ struct ServerBrowserView: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    private func progressBar(_ fraction: Double) -> some View {
+        GeometryReader { geometry in
+            VStack {
+                Spacer(minLength: 0)
+                Rectangle()
+                    .fill(Color.accentColor)
+                    .frame(width: geometry.size.width * fraction, height: 3)
+            }
+        }
     }
 
     private func posterImage(_ entry: MediaEntry) -> some View {
