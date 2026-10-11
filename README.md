@@ -6,12 +6,19 @@ behaviour contract* of a reference app — **no original code, no original asset
 | Area | Contract source | State |
 |---|---|---|
 | `senplay://` deep links (`x-callback-url/play`, `download`, `importserver`, `importicon`) | reference build's shipped `URLSchemes.md` | done |
-| Media servers: WebDAV, Emby / Jellyfin / 飞牛 | server browse + direct-play endpoints | done |
-| Playback: local files, network URLs, side-loaded subtitles, resume position | UI behaviour | done |
+| Media servers: WebDAV, Emby / Jellyfin / 飞牛 fnOS, FTP | server browse + direct-play endpoints | done |
+| SMB shares | native reader | Android only (see below) |
+| Media library: poster wall, search, five sort keys, continue watching, recently added | UI behaviour | done |
+| Playback: local files, network URLs, side-loaded subtitles, resume, continuous play, intro/outro skip | UI behaviour | done |
 | Player gestures: double-tap zones, vertical brightness/volume, horizontal seek, pinch zoom, long-press speed | gesture preference map | done |
-| Player control bar: close / switch media / time / scrubbing / speed / subtitles / audio track / volume / more | control bar inventory | done |
-| Settings surface: the ten preference groups | captured settings window | done |
-| Karoake-grade kernel: MKV/TS/ASS/HDR/DoVi | reference build's FFmpegKit lineage | not started |
+| Player control bar: close / switch media / time / scrubbing / speed / subtitles / audio track / volume / chapters / PiP / casting / more | control bar inventory | done |
+| Lock screen and Control Center transport | UI behaviour | done |
+| IPTV (M3U/M3U8) with groups and search | UI behaviour | done |
+| Danmaku: dandanplay-compatible protocol and lane-bucketed overlay | UI behaviour | done |
+| Local network discovery over mDNS | UI behaviour | done |
+| Settings surface: the ten preference groups, applied to the kernel | captured settings window | done |
+| Kernel: MKV / TS / ASS / HDR / Dolby Vision | KSPlayer 2.3.4 + FFmpegKit 6.1.4 on iOS, Media3 on Android | done |
+| Plex, netdisk providers, DLNA casting | — | not started |
 
 ## Docs
 
