@@ -507,6 +507,9 @@ struct PlayerScreen: View {
     @State private var dragStartVolume: Double = 1
     @State private var dragStartBrightness: Double = 0.5
     @State private var longPressSpeedActive = false
+    @AppStorage(PrefKey.longPressSpeed) private var longPressSpeedRate = 2.0
+    @AppStorage("pref.gesture.longPressLeftSpeed") private var longPressLeftSpeed = 0.5
+    @AppStorage("pref.gesture.longPressRightSpeed") private var longPressRightSpeed = 2.0
     @State private var hud: PlayerHUD?
     @State private var toast: String?
     @State private var hideTask: DispatchWorkItem?
@@ -662,8 +665,11 @@ struct PlayerScreen: View {
                 .onEnded { _ in
                     guard !longPressSpeedActive else { return }
                     longPressSpeedActive = true
-                    kernel?.setRate(2)
-                    hud = PlayerHUD(symbol: "forward.fill", text: "2.00x")
+                    // The screen has no left or right, so it uses the general hold
+                    // rate. The arrow keys do have sides and use their own.
+                    kernel?.setRate(Float(longPressSpeedRate))
+                    hud = PlayerHUD(symbol: "forward.fill",
+                                    text: String(format: "%.2fx", longPressSpeedRate))
                 }
         )
         .onTapGesture { toggleControls() }
