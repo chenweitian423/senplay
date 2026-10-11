@@ -25,17 +25,27 @@ struct DanmakuEndpoint: Identifiable, Codable, Hashable {
     /// user supplies their own, so no private address ever lands in the repo.
     var url: String
 
+    /// Slots are individual preference keys — `pref.danmaku.endpoint.N` — so the
+    /// Android build reads and writes exactly the same entries. The cap matches on
+    /// both sides; an empty slot simply means "not configured".
+    private static let slotCount = 5
+
     static func load() -> [DanmakuEndpoint] {
-        guard let data = UserDefaults.standard.data(forKey: "danmaku.endpoints.v1"),
-              let list = try? JSONDecoder().decode([DanmakuEndpoint].self, from: data) else {
-            return [DanmakuEndpoint(id: "default", name: "默认", url: "")]
+        let slots = (1...slotCount).map { index in
+            UserDefaults.standard.string(forKey: "pref.danmaku.endpoint.\(index)") ?? ""
         }
-        return list
+        if slots.allSatisfy({ $0.isEmpty }) {
+            return (1...slotCount).map { DanmakuEndpoint(id: "\($0)", name: "API-\($0)", url: "") }
+        }
+        return slots.enumerated().map { offset, url in
+            DanmakuEndpoint(id: "\(offset + 1)", name: "API-\(offset + 1)", url: url)
+        }
     }
 
     static func save(_ list: [DanmakuEndpoint]) {
-        if let data = try? JSONEncoder().encode(list) {
-            UserDefaults.standard.set(data, forKey: "danmaku.endpoints.v1")
+        for index in 1...slotCount {
+            let value = index <= list.count ? list[index - 1].url : ""
+            UserDefaults.standard.set(value, forKey: "pref.danmaku.endpoint.\(index)")
         }
     }
 }

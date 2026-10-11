@@ -91,11 +91,11 @@ object DanmakuLoader {
 }
 
 /**
- * Endpoints live in preferences under "danmaku.endpoint.N"; the list is capped so a
+ * Endpoints live in preferences under "pref.danmaku.endpoint.N"; the list is capped so a
  * stray key cannot grow the surface unbounded. Empty entries are skipped, which is
  * what keeps a fresh install from pointing anywhere.
  */
 fun danmakuEndpoints(store: LibraryStore): List<String> =
     (1..5).mapNotNull { index ->
-        store.prefString("danmaku.endpoint.$index", "").takeIf { it.isNotBlank() }
+        store.prefString("pref.danmaku.endpoint.$index", "").takeIf { it.isNotBlank() }
     }

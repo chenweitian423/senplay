@@ -1,0 +1,46 @@
+name: Cross-platform contract
+
+# Cheap checks that guard promises the two builds make to each other. They need
+# neither Xcode nor the Android SDK, so they finish in seconds and can gate the
+# slower jobs.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "ios/SenPlay/**"
+      - "android/app/src/main/java/**"
+      - "tools/**"
+      - ".github/workflows/contract.yml"
+  pull_request:
+    paths:
+      - "ios/SenPlay/**"
+      - "android/app/src/main/java/**"
+      - "tools/**"
+
+jobs:
+  preferences:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preference keys agree across platforms
+        run: python3 tools/check-prefs.py
+
+      - name: No private endpoints or credentials in the tree
+        run: |
+          set -euo pipefail
+          # The forensics material contained real server names and danmaku tokens.
+          # None of it may reach the repository: the app takes user-supplied
+          # endpoints instead, and this is the check that keeps it that way.
+          # .github is excluded because this file has to name the patterns it bans.
+          if grep -rInE 'danmu\.sky423\.cn|106\.14\.92\.10|:18888|:9321' \
+              --include='*.swift' --include='*.kt' --include='*.md' \
+              --include='*.json' --include='*.kts' \
+              --exclude-dir='.github' .; then
+            echo "::error::private endpoint found in the repository"
+            exit 1
+          fi
+          echo "clean"

@@ -85,8 +85,8 @@ final class IPTVStore: ObservableObject {
     @Published private(set) var channels: [IPTVChannel] = []
     @Published private(set) var lastError: String?
 
-    private let sourcesKey = "iptv.sources.v1"
-    private let channelsKey = "iptv.channels.v1"
+    private let sourcesKey = "iptv.sources"
+    private let channelsKey = "iptv.channels"
 
     init() {
         let defaults = UserDefaults.standard
