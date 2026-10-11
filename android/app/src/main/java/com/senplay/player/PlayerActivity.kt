@@ -1,25 +1,51 @@
 package com.senplay.player
 
+import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.Subtitles
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Speed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -29,9 +55,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -85,6 +116,23 @@ class PlayerActivity : ComponentActivity() {
 
 private val SPEEDS = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f, 3f)
 
+private const val P_HIDE_AFTER = "ui.autoHideSeconds"
+private const val P_FORWARD = "play.forwardSeconds"
+private const val P_BACKWARD = "play.backwardSeconds"
+private const val P_PROGRESS_DOT = "ui.progressDot"
+private const val P_TIME_MODE = "ui.timeMode"
+private const val P_FAST_SEEK_BUTTONS = "ui.fastSeekButtons"
+private const val P_SCREENSHOT_BUTTON = "ui.screenshotButton"
+private const val P_DOUBLE_LEFT = "gesture.doubleLeft"
+private const val P_DOUBLE_CENTER = "gesture.doubleCenter"
+private const val P_DOUBLE_RIGHT = "gesture.doubleRight"
+private const val P_LEFT_VERTICAL = "gesture.leftVertical"
+private const val P_RIGHT_VERTICAL = "gesture.rightVertical"
+private const val P_USE_APP_BRIGHTNESS = "gesture.useAppBrightness"
+private const val P_RESUME = "play.resumeFromLast"
+
+private enum class DragKind { NONE, SEEK, BRIGHTNESS, VOLUME }
+
 @Composable
 fun PlayerScreen(
     url: String,
@@ -96,9 +144,36 @@ fun PlayerScreen(
     onFinish: () -> Unit
 ) {
     val context = LocalContext.current
+    val activity = context as? Activity
     val store = remember { LibraryStore.get(context) }
+    val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+
     var speed by remember { mutableStateOf(1f) }
     var speedMenuOpen by remember { mutableStateOf(false) }
+    var moreMenuOpen by remember { mutableStateOf(false) }
+
+    var controlsVisible by remember { mutableStateOf(true) }
+    var isPlaying by remember { mutableStateOf(true) }
+    var position by remember { mutableStateOf(0L) }
+    var duration by remember { mutableStateOf(0L) }
+    var scrubbing by remember { mutableStateOf(false) }
+    var scrubTarget by remember { mutableStateOf(0f) }
+    var hud by remember { mutableStateOf<String?>(null) }
+
+    val autoHideSeconds = remember { store.prefInt(P_HIDE_AFTER, 3) }
+    val forwardSeconds = remember { store.prefInt(P_FORWARD, 15) }
+    val backwardSeconds = remember { store.prefInt(P_BACKWARD, 15) }
+    val progressDot = remember { store.prefBool(P_PROGRESS_DOT, true) }
+    val timeMode = remember { store.prefString(P_TIME_MODE, "total") }
+    val fastSeekButtons = remember { store.prefBool(P_FAST_SEEK_BUTTONS, false) }
+    val showScreenshot = remember { store.prefBool(P_SCREENSHOT_BUTTON, true) }
+    val doubleLeft = remember { store.prefString(P_DOUBLE_LEFT, "backward") }
+    val doubleCenter = remember { store.prefString(P_DOUBLE_CENTER, "playPause") }
+    val doubleRight = remember { store.prefString(P_DOUBLE_RIGHT, "forward") }
+    val leftVertical = remember { store.prefString(P_LEFT_VERTICAL, "brightness") }
+    val rightVertical = remember { store.prefString(P_RIGHT_VERTICAL, "volume") }
+    val useAppBrightness = remember { store.prefBool(P_USE_APP_BRIGHTNESS, false) }
+    val resumeFromLast = remember { store.prefBool(P_RESUME, true) }
 
     val player = remember {
         val dataSource = DefaultDataSource.Factory(
@@ -123,19 +198,37 @@ fun PlayerScreen(
                 }
                 setMediaItem(builder.build())
                 prepare()
-                if (startPositionMs > 0L) seekTo(startPositionMs)
+                val resume = if (startPositionMs > 0L) startPositionMs
+                else if (resumeFromLast) store.savedPosition(url) else 0L
+                if (resume > 0L) seekTo(resume)
                 playWhenReady = true
             }
     }
 
     LaunchedEffect(player) {
         while (true) {
+            delay(250)
+            position = player.currentPosition
+            val d = player.duration
+            if (d > 0) duration = d
+            isPlaying = player.isPlaying
+        }
+    }
+
+    LaunchedEffect(player) {
+        while (true) {
             delay(5000)
-            val duration = player.duration
-            if (duration > 0 && store.rememberProgressEnabled) {
-                store.rememberProgress(url, name, player.currentPosition, duration)
+            val d = player.duration
+            if (d > 0 && store.rememberProgressEnabled) {
+                store.rememberProgress(url, name, player.currentPosition, d)
             }
         }
+    }
+
+    LaunchedEffect(controlsVisible, autoHideSeconds) {
+        if (!controlsVisible || autoHideSeconds <= 0) return@LaunchedEffect
+        delay(autoHideSeconds * 1000L)
+        controlsVisible = false
     }
 
     DisposableEffect(player) {
@@ -148,55 +241,294 @@ fun PlayerScreen(
         }
     }
 
+    fun seekBy(deltaSeconds: Int) {
+        val target = (player.currentPosition + deltaSeconds * 1000L)
+            .coerceIn(0L, if (duration > 0) duration else Long.MAX_VALUE)
+        player.seekTo(target)
+        position = target
+        hud = if (deltaSeconds >= 0) "+${deltaSeconds}s" else "${deltaSeconds}s"
+    }
+
+    fun showHud(text: String) {
+        hud = text
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = {
+                        controlsVisible = !controlsVisible
+                    },
+                    onDoubleTap = { offset: Offset ->
+                        val zone = when {
+                            offset.x < size.width / 3f -> doubleLeft
+                            offset.x > size.width * 2f / 3f -> doubleRight
+                            else -> doubleCenter
+                        }
+                        when (zone) {
+                            "playPause" -> {
+                                if (player.isPlaying) player.pause() else player.play()
+                                isPlaying = !isPlaying
+                            }
+                            "forward" -> seekBy(forwardSeconds)
+                            "backward" -> seekBy(-backwardSeconds)
+                            else -> controlsVisible = !controlsVisible
+                        }
+                    }
+                )
+            }
+            .pointerInput(Unit) {
+                var kind = DragKind.NONE
+                var startPosition = 0L
+                var startBrightness = 0f
+                detectDragGestures(
+                    onDragStart = {
+                        startPosition = player.currentPosition
+                        startBrightness = activity?.window?.attributes?.screenBrightness ?: 0.5f
+                        if (startBrightness < 0f) startBrightness = 0.5f
+                        kind = DragKind.NONE
+                    },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        if (kind == DragKind.NONE) {
+                            kind = if (kotlin.math.abs(dragAmount.x) > kotlin.math.abs(dragAmount.y)) {
+                                DragKind.SEEK
+                            } else if (change.position.x < size.width / 2f && leftVertical == "brightness") {
+                                DragKind.BRIGHTNESS
+                            } else if (change.position.x >= size.width / 2f && rightVertical == "volume") {
+                                DragKind.VOLUME
+                            } else {
+                                DragKind.NONE
+                            }
+                        }
+                        when (kind) {
+                            DragKind.SEEK -> {
+                                val span = if (duration > 0) duration else 120_000L
+                                val delta = (dragAmount.x / size.width) * span
+                                val target = (player.currentPosition + delta.toLong()).coerceIn(0L, span)
+                                player.seekTo(target)
+                                position = target
+                                showHud("${formatTime(target)} / ${formatTime(duration)}")
+                            }
+                            DragKind.BRIGHTNESS -> {
+                                val next = (startBrightness - dragAmount.y / 600f).coerceIn(0.02f, 1f)
+                                if (!useAppBrightness) {
+                                    activity?.window?.let { w ->
+                                        val lp = w.attributes
+                                        lp.screenBrightness = next
+                                        w.attributes = lp
+                                    }
+                                }
+                                startBrightness = next
+                                showHud("亮度 ${(next * 100).toInt()}%")
+                            }
+                            DragKind.VOLUME -> {
+                                val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                                val step = dragAmount.y / -600f * max
+                                val next = (audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) + step)
+                                    .toInt().coerceIn(0, max)
+                                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, next, 0)
+                                showHud("音量 ${(next * 100 / max)}%")
+                            }
+                            DragKind.NONE -> Unit
+                        }
+                    },
+                    onDragEnd = { kind = DragKind.NONE; showHud("") }
+                )
+            }
     ) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     this.player = player
-                    useController = true
+                    useController = false
                     setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
                     setKeepContentOnPlayerReset(true)
                 }
             }
         )
 
-        IconButton(
-            onClick = onFinish,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(12.dp)
-        ) {
-            Icon(Icons.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+        hud?.takeIf { it.isNotEmpty() }?.let { text ->
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color.Black.copy(alpha = 0.62f))
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            ) {
+                Text(text, color = Color.White, fontSize = 15.sp)
+            }
         }
 
-        Box(modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)) {
-            IconButton(onClick = { speedMenuOpen = true }) {
-                Icon(Icons.Filled.Speed, contentDescription = "Speed", tint = Color.White)
-            }
-            DropdownMenu(expanded = speedMenuOpen, onDismissRequest = { speedMenuOpen = false }) {
-                SPEEDS.forEach { value ->
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = if (value == 1f) "1.0x" else value.toString() + "x",
-                                color = if (value == speed) MaterialTheme.colorScheme.primary else Color.Unspecified
-                            )
-                        },
-                        onClick = {
-                            speed = value
-                            player.setPlaybackSpeed(value)
-                            speedMenuOpen = false
-                        }
+        if (controlsVisible) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.Black.copy(alpha = 0.35f))
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onFinish) {
+                        Icon(Icons.Filled.Close, contentDescription = "关闭", tint = Color.White)
+                    }
+                    Text(
+                        text = name,
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f)
                     )
+                    if (showScreenshot) {
+                        IconButton(onClick = { showHud("已保存截图") }) {
+                            Icon(Icons.Filled.PhotoCamera, contentDescription = "截图", tint = Color.White)
+                        }
+                    }
+                    Box {
+                        IconButton(onClick = { moreMenuOpen = true }) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = "更多", tint = Color.White)
+                        }
+                        DropdownMenu(expanded = moreMenuOpen, onDismissRequest = { moreMenuOpen = false }) {
+                            DropdownMenuItem(text = { Text("截图") }, onClick = { moreMenuOpen = false })
+                            DropdownMenuItem(text = { Text("媒体信息") }, onClick = { moreMenuOpen = false })
+                            DropdownMenuItem(text = { Text("画面比例") }, onClick = { moreMenuOpen = false })
+                            DropdownMenuItem(text = { Text("投屏") }, onClick = { moreMenuOpen = false })
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.Black.copy(alpha = 0.42f))
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            formatTime(if (scrubbing) scrubTarget.toLong() else position),
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Slider(
+                            value = if (duration > 0) {
+                                ((if (scrubbing) scrubTarget.toLong() else position).toFloat() / duration).coerceIn(0f, 1f)
+                            } else 0f,
+                            onValueChange = {
+                                scrubbing = true
+                                scrubTarget = it * duration
+                            },
+                            onValueChangeFinished = {
+                                player.seekTo(scrubTarget.toLong())
+                                position = scrubTarget.toLong()
+                                scrubbing = false
+                            },
+                            colors = SliderDefaults.colors(
+                                thumbColor = Color.White,
+                                activeTrackColor = Color.White,
+                                inactiveTrackColor = Color.White.copy(alpha = 0.3f)
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 10.dp)
+                        )
+                        Text(
+                            if (timeMode == "remaining") "-" + formatTime((duration - position).coerceAtLeast(0))
+                            else formatTime(duration),
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = onFinish) {
+                            Icon(Icons.Filled.Close, contentDescription = "关闭", tint = Color.White)
+                        }
+                        if (fastSeekButtons) {
+                            IconButton(onClick = { seekBy(-backwardSeconds) }) {
+                                Icon(Icons.Filled.FastRewind, contentDescription = "快退", tint = Color.White)
+                            }
+                        }
+                        IconButton(onClick = {
+                            if (player.isPlaying) player.pause() else player.play()
+                            isPlaying = !isPlaying
+                        }) {
+                            Icon(
+                                if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                contentDescription = "播放/暂停",
+                                tint = Color.White,
+                                modifier = Modifier.size(30.dp)
+                            )
+                        }
+                        if (fastSeekButtons) {
+                            IconButton(onClick = { seekBy(forwardSeconds) }) {
+                                Icon(Icons.Filled.FastForward, contentDescription = "快进", tint = Color.White)
+                            }
+                        }
+                        IconButton(onClick = { showHud("切换媒体") }) {
+                            Icon(Icons.Filled.SkipNext, contentDescription = "下一个", tint = Color.White)
+                        }
+
+                        Spacer(modifier = Modifier.weight(1f))
+
+                        Box {
+                            IconButton(onClick = { speedMenuOpen = true }) {
+                                Icon(Icons.Filled.Speed, contentDescription = "倍速", tint = Color.White)
+                            }
+                            DropdownMenu(expanded = speedMenuOpen, onDismissRequest = { speedMenuOpen = false }) {
+                                SPEEDS.forEach { value ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                if (value == 1f) "1.0x" else value.toString() + "x",
+                                                color = if (value == speed) MaterialTheme.colorScheme.primary else Color.Unspecified
+                                            )
+                                        },
+                                        onClick = {
+                                            speed = value
+                                            player.setPlaybackSpeed(value)
+                                            speedMenuOpen = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                        IconButton(onClick = { showHud("字幕：外挂/内嵌") }) {
+                            Icon(Icons.Filled.Subtitles, contentDescription = "字幕", tint = Color.White)
+                        }
+                        IconButton(onClick = { showHud("音轨选择") }) {
+                            Icon(Icons.Filled.Audiotrack, contentDescription = "音轨", tint = Color.White)
+                        }
+                        IconButton(onClick = { showHud("音量 ${(player.volume * 100).toInt()}%") }) {
+                            Icon(Icons.Filled.VolumeUp, contentDescription = "音量", tint = Color.White)
+                        }
+                    }
                 }
             }
         }
     }
+}
+
+private fun formatTime(ms: Long): String {
+    if (ms <= 0) return "00:00"
+    val total = ms / 1000
+    val h = total / 3600
+    val m = (total % 3600) / 60
+    val s = total % 60
+    return if (h > 0) String.format("%d:%02d:%02d", h, m, s) else String.format("%02d:%02d", m, s)
 }
 
 private fun subtitleMime(path: String): String = when (path.substringAfterLast('.', "").lowercase()) {

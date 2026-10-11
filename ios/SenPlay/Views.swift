@@ -13,7 +13,7 @@ struct HomeView: View {
             ServersView(store: store, pending: $pending)
                 .tabItem { Label("服务器", systemImage: "server.rack") }
 
-            SettingsView(store: store)
+            PreferencesView()
                 .tabItem { Label("设置", systemImage: "gearshape") }
         }
     }

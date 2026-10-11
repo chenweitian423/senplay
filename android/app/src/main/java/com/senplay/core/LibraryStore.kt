@@ -93,6 +93,28 @@ class LibraryStore private constructor(context: Context) {
             prefs.edit().putString(KEY_UA, value).apply()
         }
 
+    // ---- preferences -------------------------------------------------------
+    // Keys are namespaced with "pref." so clearPreferences() can wipe playback
+    // preferences without touching servers, URL list or history.
+
+    fun prefBool(key: String, def: Boolean): Boolean = prefs.getBoolean(PREF_PREFIX + key, def)
+    fun setPrefBool(key: String, value: Boolean) = prefs.edit().putBoolean(PREF_PREFIX + key, value).apply()
+
+    fun prefInt(key: String, def: Int): Int = prefs.getInt(PREF_PREFIX + key, def)
+    fun setPrefInt(key: String, value: Int) = prefs.edit().putInt(PREF_PREFIX + key, value).apply()
+
+    fun prefFloat(key: String, def: Float): Float = prefs.getFloat(PREF_PREFIX + key, def)
+    fun setPrefFloat(key: String, value: Float) = prefs.edit().putFloat(PREF_PREFIX + key, value).apply()
+
+    fun prefString(key: String, def: String): String = prefs.getString(PREF_PREFIX + key, def) ?: def
+    fun setPrefString(key: String, value: String) = prefs.edit().putString(PREF_PREFIX + key, value).apply()
+
+    fun clearPreferences() {
+        val editor = prefs.edit()
+        prefs.all.keys.filter { it.startsWith(PREF_PREFIX) }.forEach { editor.remove(it) }
+        editor.apply()
+    }
+
     private fun readArray(key: String): List<JSONObject> {
         val raw = prefs.getString(key, null) ?: return emptyList()
         return runCatching {
@@ -129,6 +151,7 @@ class LibraryStore private constructor(context: Context) {
         private const val KEY_HISTORY = "history"
         private const val KEY_REMEMBER = "remember_progress"
         private const val KEY_UA = "default_user_agent"
+        private const val PREF_PREFIX = "pref."
         const val DEFAULT_UA = "SenPlay/1.0 (Android)"
 
         @Volatile
