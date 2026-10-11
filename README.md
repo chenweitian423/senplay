@@ -6,7 +6,7 @@ behaviour contract* of a reference app — **no original code, no original asset
 | Area | Contract source | State |
 |---|---|---|
 | `senplay://` deep links (`x-callback-url/play`, `download`, `importserver`, `importicon`) | reference build's shipped `URLSchemes.md` | done |
-| Media servers: WebDAV, Emby / Jellyfin / 飞牛 fnOS, FTP | server browse + direct-play endpoints | done |
+| Media servers: WebDAV, Emby / Jellyfin / 飞牛 fnOS, Plex, FTP, S3 | server browse + direct-play endpoints | done |
 | SMB shares | native reader | Android only (see below) |
 | SFTP | Media3 data source | Android only (see below) |
 | Media library: poster wall, search, five sort keys, continue watching, recently added, collections | UI behaviour | done |
@@ -21,7 +21,7 @@ behaviour contract* of a reference app — **no original code, no original asset
 | Kernel: MKV / TS / ASS / HDR / Dolby Vision | KSPlayer 2.3.4 + FFmpegKit 6.1.4 on iOS, Media3 on Android | done |
 | Plex (XML client on both platforms) | server API | done |
 | DLNA casting | SSDP discovery + SOAP AVTransport | Android only (see below) |
-| Netdisk providers | — | not started, see `docs/COVERAGE.md` |
+| S3-compatible object storage (OSS / COS / R2 / MinIO …) | Signature V4, hand-written | done |
 
 ## Docs
 
