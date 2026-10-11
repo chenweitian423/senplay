@@ -4,6 +4,21 @@ import SwiftUI
 struct HomeView: View {
     @ObservedObject var store: LibraryStore
     @Binding var pending: PlayRequest?
+    /// The accent the whole app tints with. Read here rather than in each screen
+    /// because @AppStorage is per-view and this is the one view they all sit under.
+    @AppStorage("pref.general.themeColor") private var themeColor = "blue"
+
+    private var accent: Color {
+        switch themeColor {
+        case "cyan": return Color(red: 0.30, green: 0.82, blue: 0.88)
+        case "green": return Color(red: 0.51, green: 0.78, blue: 0.52)
+        case "purple": return Color(red: 0.73, green: 0.41, blue: 0.78)
+        case "orange": return Color(red: 1.00, green: 0.72, blue: 0.30)
+        case "red": return Color(red: 0.90, green: 0.45, blue: 0.45)
+        case "indigo": return Color(red: 0.47, green: 0.53, blue: 0.80)
+        default: return Color(red: 0.30, green: 0.76, blue: 1.00)
+        }
+    }
 
     var body: some View {
         TabView {
@@ -22,6 +37,7 @@ struct HomeView: View {
             PreferencesView()
                 .tabItem { Label("设置", systemImage: "gearshape") }
         }
+        .tint(accent)
     }
 }
 
