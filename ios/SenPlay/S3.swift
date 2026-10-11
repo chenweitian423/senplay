@@ -196,6 +196,26 @@ enum S3Signer {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
+    /// Exposed so a unit test can drive the derivation with an arbitrary service; the
+    /// client itself always signs for "s3". AWS's published test vectors use the
+    /// service name "service", which is the only way to check the chain against a
+    /// value the specification itself provides.
+    static func signatureForTest(
+        secret: String,
+        day: String,
+        region: String,
+        service: String,
+        stringToSign: String
+    ) -> String {
+        let kDate = hmac(key: Data(("AWS4" + secret).utf8), message: Data(day.utf8))
+        let kRegion = hmac(key: kDate, message: Data(region.utf8))
+        let kService = hmac(key: kRegion, message: Data(service.utf8))
+        let kSigning = hmac(key: kService, message: Data("aws4_request".utf8))
+        return hmac(key: kSigning, message: Data(stringToSign.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
+
     private static func hmac(key: Data, message: Data) -> Data {
         let symmetric = SymmetricKey(data: key)
         return Data(HMAC<SHA256>.authenticationCode(for: message, using: symmetric))
