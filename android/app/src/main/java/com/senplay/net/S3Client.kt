@@ -334,8 +334,16 @@ object S3 {
 }
 
 /**
- * Reads objects directly, signing each request. Used when a URL would expire mid
- * session or when the object needs ranged reads.
+ * Reads objects directly, signing each request, so a long session cannot outlive its
+ * URL the way a presigned one does.
+ *
+ * **Not currently wired up.** The player resolves S3 items to a presigned URL in
+ * ServersScreen, which works but expires; this exists for the case where that matters.
+ * Connecting it needs the credentials to reach the playback service, which today has
+ * no ServerConfig — either through the URI the way the SMB and SFTP sources do, or by
+ * handing the service the server for the current queue. The class is kept because the
+ * signing and range logic is the fiddly part and it is already correct; the missing
+ * part is plumbing.
  */
 class S3DataSourceFactory(private val server: ServerConfig) : DataSource.Factory {
     override fun createDataSource(): DataSource = S3DataSource(server)
