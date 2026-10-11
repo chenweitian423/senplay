@@ -68,6 +68,22 @@ class PlaybackService : MediaSessionService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
+        // Preferred languages. Media3 matches these against the track metadata the
+        // container carries, the same way the iOS side matches on languageCode — the
+        // preference is a hint, and a file without a matching track simply keeps
+        // whatever it would have chosen anyway.
+        val audioLanguage = store.prefString("audio.firstLanguage", "")
+        val textLanguage = store.prefString("subtitle.firstLanguage", "")
+        if (audioLanguage.isNotBlank() || textLanguage.isNotBlank()) {
+            player.trackSelectionParameters = player.trackSelectionParameters
+                .buildUpon()
+                .apply {
+                    if (audioLanguage.isNotBlank()) setPreferredAudioLanguage(audioLanguage)
+                    if (textLanguage.isNotBlank()) setPreferredTextLanguage(textLanguage)
+                }
+                .build()
+        }
+
         player.addAnalyticsListener(analyticsListener())
         PlaybackStats.reset()
 

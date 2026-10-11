@@ -205,6 +205,10 @@ final class SubtitleController: ObservableObject {
 
 final class KernelPlayer: NSObject, ObservableObject {
     @Published var state: KSPlayerState = .initialized
+    /// Set from the player screen before the layer starts.
+    var preferredAudioLanguage = ""
+    var preferredSubtitleLanguage = ""
+    private var languagesApplied = false
     @Published var currentTime: TimeInterval = 0
     @Published var totalTime: TimeInterval = 0
     @Published var bufferingProgress: Int = 0
@@ -291,6 +295,26 @@ final class KernelPlayer: NSObject, ObservableObject {
         layer.player.select(track: track)
     }
 
+    /// Picks the audio and subtitle track whose language matches the viewer's
+    /// preference. Language codes arrive variously as "zh", "zh-Hans" or "chi", so
+    /// the comparison is on the prefix and the first match wins — the same tolerance
+    /// a person would apply reading the track list.
+    ///
+    /// Called once the player is ready, because tracks do not exist before that.
+    func applyPreferredLanguages(audio: String, subtitle: String) {
+        if !audio.isEmpty, let track = match(audio, in: audioTracks()) {
+            select(track)
+        }
+        if !subtitle.isEmpty, let track = match(subtitle, in: subtitleTracks()) {
+            select(track)
+        }
+    }
+
+    private func match(_ preferred: String, in tracks: [MediaPlayerTrack]) -> MediaPlayerTrack? {
+        let wanted = preferred.lowercased()
+        return tracks.first { ($0.languageCode ?? "").lowercased().hasPrefix(wanted) }
+    }
+
     func rateOptions() -> [Float] { [0.5, 0.75, 1, 1.25, 1.5, 2, 3] }
 
     func capture() -> UIImage? {
@@ -311,6 +335,13 @@ extension KernelPlayer: KSPlayerLayerDelegate {
     func player(layer: KSPlayerLayer, state: KSPlayerState) {
         self.state = state
         bufferingProgress = layer.bufferingProgress
+        // Once only: the viewer can still change tracks by hand afterwards, and a
+        // second application would undo that.
+        if state == .readyToPlay, !languagesApplied {
+            languagesApplied = true
+            applyPreferredLanguages(audio: preferredAudioLanguage,
+                                    subtitle: preferredSubtitleLanguage)
+        }
         if state == .bufferFinished || state == .buffering {
             mediaTitle = layer.player.dynamicInfo?.metadata["title"]
             if let info = layer.player.dynamicInfo {
@@ -508,6 +539,8 @@ struct PlayerScreen: View {
     @State private var dragStartBrightness: Double = 0.5
     @State private var longPressSpeedActive = false
     @AppStorage(PrefKey.longPressSpeed) private var longPressSpeedRate = 2.0
+    @AppStorage("pref.audio.firstLanguage") private var preferredAudioLanguage = ""
+    @AppStorage("pref.subtitle.firstLanguage") private var preferredSubtitleLanguage = ""
     @AppStorage("pref.gesture.longPressLeftSpeed") private var longPressLeftSpeed = 0.5
     @AppStorage("pref.gesture.longPressRightSpeed") private var longPressRightSpeed = 2.0
     @State private var hud: PlayerHUD?
@@ -1378,6 +1411,8 @@ struct PlayerScreen: View {
         options.isSeekedAutoPlay = true
 
         let player = KernelPlayer(url: url, options: options)
+        player.preferredAudioLanguage = preferredAudioLanguage
+        player.preferredSubtitleLanguage = preferredSubtitleLanguage
         player.setExternalPlayback(true)
         player.onTime = { [self] current, total in
             if !scrubbing { currentTime = current }
