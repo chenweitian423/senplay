@@ -78,6 +78,11 @@ final class LibraryStore: ObservableObject {
         rememberProgress ? (history.first { $0.url == url }?.positionMs ?? 0) : 0
     }
 
+    func removeHistory(url: String) {
+        history.removeAll { $0.url == url }
+        defaults.set(LibraryStore.encode(history), forKey: Keys.history)
+    }
+
     func clearHistory() {
         history = []
         defaults.set(LibraryStore.encode(history), forKey: Keys.history)

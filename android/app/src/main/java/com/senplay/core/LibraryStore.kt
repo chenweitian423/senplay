@@ -77,6 +77,21 @@ class LibraryStore private constructor(context: Context) {
 
     fun savedPosition(url: String): Long = history().firstOrNull { it.url == url }?.positionMs ?: 0L
 
+    fun removeHistory(url: String) {
+        writeArray(
+            KEY_HISTORY,
+            history().filterNot { it.url == url }.map { h ->
+                JSONObject().apply {
+                    put("url", h.url)
+                    put("name", h.name)
+                    put("position", h.positionMs)
+                    put("duration", h.durationMs)
+                    put("updatedAt", h.updatedAt)
+                }
+            }
+        )
+    }
+
     fun clearHistory() {
         prefs.edit().remove(KEY_HISTORY).apply()
     }

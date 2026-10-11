@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dns
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -34,6 +36,8 @@ fun HomeScreen(store: LibraryStore) {
     val tabs = listOf(
         Tab("媒体库", Icons.Filled.VideoLibrary),
         Tab("服务器", Icons.Filled.Dns),
+        Tab("IPTV", Icons.Filled.Tv),
+        Tab("记录", Icons.Filled.History),
         Tab("设置", Icons.Filled.Settings)
     )
 
@@ -56,6 +60,8 @@ fun HomeScreen(store: LibraryStore) {
             when (tab) {
                 0 -> LibraryScreen(store) { PlayerLauncher.start(context, it) }
                 1 -> ServersScreen(store) { PlayerLauncher.start(context, it) }
+                2 -> IPTVScreen(store) { PlayerLauncher.start(context, it) }
+                3 -> HistoryScreen(store) { PlayerLauncher.start(context, it) }
                 else -> SettingsScreen(store)
             }
         }

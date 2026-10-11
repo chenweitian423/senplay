@@ -13,9 +13,80 @@ struct HomeView: View {
             ServersView(store: store, pending: $pending)
                 .tabItem { Label("服务器", systemImage: "server.rack") }
 
+            IPTVScreen(pending: $pending)
+                .tabItem { Label("IPTV", systemImage: "tv") }
+
+            HistoryView(store: store, pending: $pending)
+                .tabItem { Label("记录", systemImage: "clock.arrow.circlepath") }
+
             PreferencesView()
                 .tabItem { Label("设置", systemImage: "gearshape") }
         }
+    }
+}
+
+/// Playback history with the resume position surfaced per row, matching the
+/// reference app's "记录" module.
+struct HistoryView: View {
+    @ObservedObject var store: LibraryStore
+    @Binding var pending: PlayRequest?
+
+    var body: some View {
+        NavigationView {
+            List {
+                if store.history.isEmpty {
+                    Text("还没有播放记录。")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                }
+                ForEach(store.history, id: \.url) { entry in
+                    Button {
+                        pending = PlayRequest(
+                            url: entry.url,
+                            name: entry.name,
+                            positionMs: entry.positionMs,
+                            queue: store.history.map { QueueItem(url: $0.url, name: $0.name) }
+                        )
+                    } label: {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(entry.name).lineLimit(1)
+                            if entry.durationMs > 0 {
+                                ProgressView(value: min(max(entry.positionMs / entry.durationMs, 0), 1))
+                                    .progressViewStyle(.linear)
+                            }
+                            Text("\(timecode(entry.positionMs)) / \(timecode(entry.durationMs)) · \(relative(entry.updatedAt))")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .swipeActions {
+                        Button("删除", role: .destructive) { store.removeHistory(url: entry.url) }
+                    }
+                }
+            }
+            .listStyle(.insetGrouped)
+            .navigationTitle("记录")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("清空") { store.clearHistory() }
+                        .disabled(store.history.isEmpty)
+                }
+            }
+        }
+        .navigationViewStyle(.stack)
+    }
+
+    private func timecode(_ ms: Double) -> String {
+        guard ms.isFinite, ms > 0 else { return "00:00" }
+        let total = Int(ms / 1000)
+        let h = total / 3600, m = (total % 3600) / 60, s = total % 60
+        return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%02d:%02d", m, s)
+    }
+
+    private func relative(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 }
 
