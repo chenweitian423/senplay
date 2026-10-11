@@ -92,6 +92,20 @@ class PlexClient(private val server: ServerConfig) {
         toItems(fetch("/library/onDeck"))
     }
 
+    /** Plex collections live under a section rather than globally. */
+    suspend fun collections(section: String): List<PlexLibrary> = withContext(Dispatchers.IO) {
+        elements(fetch("/library/sections/$section/collections"), "Directory").mapNotNull { element ->
+            val key = element.getAttribute("ratingKey").ifBlank { element.getAttribute("key") }
+            val title = element.getAttribute("title")
+            if (key.isBlank() || title.isBlank()) null else PlexLibrary(key, title, "collection")
+        }
+    }
+
+    /** Items inside one collection, by its rating key. */
+    suspend fun itemsInCollection(key: String): List<PlexItem> = withContext(Dispatchers.IO) {
+        toItems(fetch("/library/collections/$key/children"))
+    }
+
     suspend fun recentlyAdded(): List<PlexItem> = withContext(Dispatchers.IO) {
         toItems(fetch("/library/recentlyAdded"))
     }

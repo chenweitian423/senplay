@@ -58,6 +58,8 @@ import com.senplay.core.PlayRequest
 import com.senplay.core.ServerConfig
 import com.senplay.net.EmbyClient
 import com.senplay.net.PlexClient
+import com.senplay.net.PlexItem
+import com.senplay.net.PlexLibrary
 import com.senplay.net.SmbTarget
 import com.senplay.net.WebDavClient
 import com.senplay.net.listFtpDirectory
@@ -165,6 +167,7 @@ private fun ServerBrowserScreen(
     var stack by remember { mutableStateOf(listOf<Pair<String, String?>>()) }
     var emby by remember { mutableStateOf<EmbyClient?>(null) }
     var plex by remember { mutableStateOf<PlexClient?>(null) }
+    var collectionId by remember { mutableStateOf<String?>(null) }
 
     var strip by remember { mutableStateOf(Strip.FILES) }
     var sortBy by remember { mutableStateOf(EmbyClient.SortBy.NAME) }
@@ -185,6 +188,9 @@ private fun ServerBrowserScreen(
                         else client.items(parentId, sortBy = sortBy, ascending = ascending)
                     Strip.RESUME -> client.resume()
                     Strip.LATEST -> client.latest()
+                    Strip.COLLECTIONS ->
+                        if (collectionId == null) client.collections(null)
+                        else client.items(collectionId!!)
                 }
             } else if (server.type == "smb") {
                 val target = SmbTarget(
@@ -209,6 +215,10 @@ private fun ServerBrowserScreen(
                 val items = when (strip) {
                     Strip.RESUME -> client.onDeck()
                     Strip.LATEST -> client.recentlyAdded()
+                    Strip.COLLECTIONS -> when (val key = collectionId) {
+                        null -> client.collections(libraryId).map { it.toItem() }
+                        else -> client.itemsInCollection(key)
+                    }
                     else -> client.items(libraryId)
                 }
                 items.map { item ->
@@ -374,6 +384,10 @@ private fun ServerBrowserScreen(
         }
 
         fun open(entry: MediaEntry) {
+            if (strip == Strip.COLLECTIONS && collectionId == null && server.isEmbyLike && entry.isDirectory) {
+                collectionId = entry.entryId ?: entry.url
+                return
+            }
             val navigable = stack.isEmpty() || !server.isEmbyLike || strip == Strip.FILES
             if (server.isEmbyLike && strip == Strip.FILES && entry.isDirectory) {
                 stack = stack + (path to parentId)
@@ -496,8 +510,22 @@ private fun ServerBrowserScreen(
 private enum class Strip(val title: String) {
     FILES("文件"),
     RESUME("继续观看"),
-    LATEST("最近添加")
+    LATEST("最近添加"),
+    COLLECTIONS("合集")
 }
+
+/** A collection has no media of its own, only a title and a key. */
+private fun PlexLibrary.toItem() = PlexItem(
+    id = id,
+    title = title,
+    year = null,
+    durationMs = 0L,
+    thumbPath = null,
+    partPath = null,
+    partSize = 0L,
+    viewOffsetMs = 0L,
+    isPlayed = false
+)
 
 @Composable
 private fun PosterCell(entry: MediaEntry, onClick: () -> Unit) {

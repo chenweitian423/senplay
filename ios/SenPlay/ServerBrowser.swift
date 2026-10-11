@@ -11,15 +11,20 @@ struct ServerBrowserView: View {
     @Binding var pending: PlayRequest?
 
     private enum Strip: String, CaseIterable, Identifiable {
-        case files, resume, latest
+        case files, resume, latest, collections
         var id: String { rawValue }
         var title: String {
             switch self {
             case .files: return "文件"
             case .resume: return "继续观看"
             case .latest: return "最近添加"
+            case .collections: return "合集"
             }
         }
+
+        /// A collection has no resume position or added date, so those strips have
+        /// nothing to show inside one.
+        var supportsNestedNavigation: Bool { self == .files || self == .collections }
     }
 
     private enum Layout: String {
@@ -42,8 +47,14 @@ struct ServerBrowserView: View {
     @State private var ftp: FTPClient?
     @State private var plex: PlexClient?
     @State private var plexLibraries: [PlexLibrary] = []
+    /// Inside a collection: the box set's id, or nil while listing them.
+    @State private var collectionId: String? = nil
+    @State private var collectionParent: String? = nil
     @State private var bridge: FTPMediaBridge?
     @State private var ftpSize: UInt64 = 0
+
+    /// Both Emby-family servers and Plex expose server-side strips.
+    private var hasStrips: Bool { isEmbyLike || server.type == "plex" }
 
     private var isEmbyLike: Bool { server.isEmbyLike }
 
@@ -106,16 +117,18 @@ struct ServerBrowserView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItemGroup(placement: .navigationBarTrailing) {
-            if isEmbyLike {
+            if hasStrips {
                 Menu {
                     Picker("板块", selection: $strip) {
                         ForEach(Strip.allCases) { Text($0.title).tag($0) }
                     }
-                    Divider()
-                    Picker("排序", selection: $sortBy) {
-                        ForEach(EmbyClient.SortBy.allCases) { Text($0.title).tag($0) }
+                    if isEmbyLike {
+                        Divider()
+                        Picker("排序", selection: $sortBy) {
+                            ForEach(EmbyClient.SortBy.allCases) { Text($0.title).tag($0) }
+                        }
+                        Toggle("升序", isOn: $ascending)
                     }
-                    Toggle("升序", isOn: $ascending)
                 } label: {
                     Image(systemName: "line.3.horizontal.decrease.circle")
                 }
@@ -127,7 +140,9 @@ struct ServerBrowserView: View {
             }
         }
         ToolbarItem(placement: .navigationBarLeading) {
-            if server.type == "plex", !plexLibraries.isEmpty, strip == .files {
+            if collectionId != nil {
+                Button("< 合集") { closeCollection() }
+            } else if server.type == "plex", !plexLibraries.isEmpty, strip == .files {
                 Menu {
                     ForEach(plexLibraries) { library in
                         Button(library.title) {
@@ -145,10 +160,16 @@ struct ServerBrowserView: View {
     }
 
     private func handleStripChange() {
-        guard isEmbyLike else { return }
+        guard hasStrips else { return }
         stack = []
         path = ""
         parentId = nil
+        collectionId = nil
+        scheduleReload()
+    }
+
+    private func closeCollection() {
+        collectionId = nil
         scheduleReload()
     }
 
@@ -296,6 +317,11 @@ struct ServerBrowserView: View {
     }
 
     private func open(_ entry: MediaEntry) {
+        if strip == .collections, collectionId == nil, entry.isDirectory {
+            collectionId = entry.entryId ?? entry.url
+            scheduleReload()
+            return
+        }
         guard isEmbyLike, strip == .files else {
             if !isEmbyLike, entry.isDirectory {
                 stack.append((path, parentId))
@@ -447,6 +473,8 @@ struct ServerBrowserView: View {
                     entries = try await client.resume()
                 case .latest:
                     entries = try await client.latest()
+                case .collections:
+                    entries = try await client.collections(parentId: collectionParent)
                 }
             } else if server.type == "plex" {
                 let client = plex ?? PlexClient(server: server)
@@ -460,6 +488,16 @@ struct ServerBrowserView: View {
                     entries = try await client.onDeck().map { plexEntry($0, client: client) }
                 case .latest:
                     entries = try await client.recentlyAdded().map { plexEntry($0, client: client) }
+                case .collections:
+                    if let key = collectionId {
+                        entries = try await client.items(inCollection: key).map { plexEntry($0, client: client) }
+                    } else {
+                        let section = path.isEmpty ? (plexLibraries.first?.id ?? "") : path
+                        entries = try await client.collections(section: section).map { collection in
+                            MediaEntry(name: collection.title, url: collection.id,
+                                       isDirectory: true, entryId: collection.id)
+                        }
+                    }
                 }
             } else if server.type == "ftp" {
                 guard let target = FTPTarget(server: server) else { throw ServerError.badAddress }

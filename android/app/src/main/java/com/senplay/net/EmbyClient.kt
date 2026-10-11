@@ -92,6 +92,10 @@ class EmbyClient(private val server: ServerConfig) {
     }
 
     /** "继续观看": whatever the server reports as partially played. */
+    /** Box sets: the server-side groupings that behave as collections. */
+    suspend fun collections(parentId: String? = null): List<MediaEntry> =
+        items(parentId, includeTypes = "BoxSet", sortBy = SortBy.NAME, ascending = true, recursive = true)
+
     suspend fun resume(limit: Int = 30): List<MediaEntry> = io {
         val url = Urls.join(server.address, "/Users/$userId/Items/Resume")
             .toHttpUrl()

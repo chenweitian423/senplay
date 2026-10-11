@@ -87,6 +87,21 @@ final class PlexClient {
         return root.children(named: "Video").map(\.asPlexItem)
     }
 
+    /// Plex collections live under a section rather than globally.
+    func collections(section: String) async throws -> [PlexLibrary] {
+        let root = try await fetch("/library/sections/\(section)/collections")
+        return root.children(named: "Directory").compactMap { node in
+            guard let key = node.attributes["key"], let title = node.attributes["title"] else { return nil }
+            return PlexLibrary(id: key, title: title, type: "collection")
+        }
+    }
+
+    /// Items inside one collection, by its rating key.
+    func items(inCollection key: String) async throws -> [PlexItem] {
+        let root = try await fetch("/library/collections/\(key)/children")
+        return root.children(named: "Video").map(\.asPlexItem)
+    }
+
     func recentlyAdded() async throws -> [PlexItem] {
         let root = try await fetch("/library/recentlyAdded")
         return root.children(named: "Video").map(\.asPlexItem)

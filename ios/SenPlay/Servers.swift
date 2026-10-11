@@ -245,6 +245,12 @@ final class EmbyClient {
     }
 
     /// "继续观看": items the server reports as partially played, newest first.
+    /// Box sets: the server-side groupings that behave as collections.
+    func collections(parentId: String? = nil) async throws -> [MediaEntry] {
+        try await items(parentId: parentId, includeTypes: "BoxSet",
+                        sortBy: .name, ascending: true, recursive: true)
+    }
+
     func resume(limit: Int = 30) async throws -> [MediaEntry] {
         var components = URLComponents(string: Urls.join(server.address, "/Users/\(userId)/Items/Resume"))!
         components.queryItems = [
