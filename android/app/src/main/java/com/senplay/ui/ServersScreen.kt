@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayCircle
@@ -182,6 +183,7 @@ private fun ServerBrowserScreen(
     // Set only for the synchronous span of a call from the detail page's own play
     // button, so open() plays instead of reopening the page that just asked.
     var fromDetail by remember { mutableStateOf(false) }
+    var carousel by remember { mutableStateOf<List<MediaEntry>>(emptyList()) }
     var sortBy by remember { mutableStateOf(EmbyClient.SortBy.NAME) }
     var ascending by remember { mutableStateOf(true) }
     var grid by remember { mutableStateOf(true) }
@@ -194,6 +196,13 @@ private fun ServerBrowserScreen(
         runCatching {
             if (server.isEmbyLike) {
                 val client = emby ?: EmbyClient(server).also { it.authenticate(); emby = it }
+                // "顶部轮播" is fetched alongside whichever strip is showing, because
+                // it sits above all of them rather than belonging to one.
+                carousel = if (prefs.prefBool("library.showCarousel", true)) {
+                    runCatching { client.latest(limit = 10) }.getOrDefault(emptyList())
+                } else {
+                    emptyList()
+                }
                 when (strip) {
                     Strip.FILES ->
                         if (parentId == null) client.views()
@@ -536,6 +545,45 @@ private fun ServerBrowserScreen(
         if (strip !in available) available.firstOrNull()?.let { strip = it }
     }
 
+    // "顶部轮播" sits above every strip, so it is not owned by one of them.
+    if (display.showCarousel && carousel.isNotEmpty()) {
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp)
+        ) {
+            items(carousel, key = { entry: MediaEntry -> entry.url + entry.name }) { item ->
+                Box(
+                    modifier = Modifier
+                        .size(width = 240.dp, height = 135.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable { open(item) }
+                ) {
+                    AsyncImage(
+                        model = item.imageUrl,
+                        contentDescription = item.name,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    Text(
+                        item.name,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth()
+                            .background(Color.Black.copy(alpha = 0.55f))
+                            .padding(horizontal = 8.dp, vertical = 5.dp)
+                    )
+                }
+            }
+        }
+    }
+
     if (grid) {
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = 118.dp),
@@ -696,6 +744,8 @@ private class ListDisplay(store: LibraryStore) {
      * the rest of the artwork group, which is on.
      */
     val showPlayButton = store.prefBool("library.displayPlayButton", true)
+    /** "顶部轮播" */
+    val showCarousel = store.prefBool("library.showCarousel", true)
     val showContinue = store.prefBool("library.showContinue", true)
 
     /**

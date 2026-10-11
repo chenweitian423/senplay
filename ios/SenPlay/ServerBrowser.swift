@@ -133,6 +133,7 @@ struct ServerBrowserView: View {
         }
     }
     @State private var detailEntry: MediaEntry?
+    @State private var carousel: [MediaEntry] = []
     @State private var path = ""
     @State private var parentId: String? = nil
     @State private var stack: [(String, String?)] = []
@@ -206,6 +207,9 @@ struct ServerBrowserView: View {
                         .foregroundColor(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(16)
+                }
+                if !carousel.isEmpty {
+                    carouselStrip
                 }
                 if layout == .grid {
                     LazyVGrid(columns: columns, spacing: 14) {
@@ -365,6 +369,47 @@ struct ServerBrowserView: View {
     /// Rating and remaining time, in the order the reference app shows them. Only
     /// what the entry carries: a folder has neither, and a server that reports no
     /// rating produces no line rather than a zero.
+    /// "顶部轮播". The same newest-first ordering the Latest strip uses, laid out
+    /// across the top of the browser rather than in the grid.
+    private var carouselStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                ForEach(carousel) { item in
+                    Button { open(item) } label: {
+                        AsyncImage(url: item.imageURL.flatMap(URL.init(string:))) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image.resizable().aspectRatio(contentMode: .fill)
+                            default:
+                                Color.secondary.opacity(0.2)
+                            }
+                        }
+                        .frame(width: 260, height: 146)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .overlay(alignment: .bottomLeading) {
+                            Text(item.name)
+                                .font(.caption.weight(.medium))
+                                .foregroundColor(.white)
+                                .lineLimit(1)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 5)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(
+                                    LinearGradient(
+                                        colors: [.black.opacity(0), .black.opacity(0.7)],
+                                        startPoint: .top, endPoint: .bottom
+                                    )
+                                )
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .padding(.bottom, 6)
+    }
+
     private func posterMark(_ entry: MediaEntry) -> String? {
         var parts: [String] = []
         if display.showRating, let rating = entry.rating, rating > 0 {
@@ -739,6 +784,13 @@ struct ServerBrowserView: View {
             if isEmbyLike {
                 let client = emby ?? EmbyClient(server: server)
                 emby = client
+                // "顶部轮播" sits above every strip, so its data is fetched alongside
+                // whichever strip is showing rather than owned by one of them.
+                if UserDefaults.standard.object(forKey: "pref.library.showCarousel") as? Bool ?? true {
+                    carousel = (try? await client.latest(limit: 10)) ?? []
+                } else {
+                    carousel = []
+                }
                 if client.accessToken.isEmpty {
                     _ = try await client.authenticate()
                 }
