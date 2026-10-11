@@ -40,6 +40,8 @@ struct ServerBrowserView: View {
     @State private var ascending = true
     @State private var search = ""
     @State private var ftp: FTPClient?
+    @State private var plex: PlexClient?
+    @State private var plexLibraries: [PlexLibrary] = []
     @State private var bridge: FTPMediaBridge?
     @State private var ftpSize: UInt64 = 0
 
@@ -125,7 +127,18 @@ struct ServerBrowserView: View {
             }
         }
         ToolbarItem(placement: .navigationBarLeading) {
-            if !stack.isEmpty {
+            if server.type == "plex", !plexLibraries.isEmpty, strip == .files {
+                Menu {
+                    ForEach(plexLibraries) { library in
+                        Button(library.title) {
+                            path = library.id
+                            scheduleReload()
+                        }
+                    }
+                } label: {
+                    Text(plexLibraries.first(where: { $0.id == path })?.title ?? "媒体库")
+                }
+            } else if !stack.isEmpty {
                 Button("< 上一级") { goUp() }
             }
         }
@@ -267,6 +280,21 @@ struct ServerBrowserView: View {
         Task { await reload() }
     }
 
+    private func plexEntry(_ item: PlexItem, client: PlexClient) -> MediaEntry {
+        MediaEntry(
+            name: item.title,
+            url: client.streamURL(for: item) ?? "",
+            isDirectory: false,
+            size: item.partSize,
+            entryId: item.id,
+            imageURL: client.artworkURL(for: item),
+            isPlayed: item.isPlayed,
+            positionMs: item.viewOffsetMs,
+            durationMs: item.durationMs,
+            year: item.year
+        )
+    }
+
     private func open(_ entry: MediaEntry) {
         guard isEmbyLike, strip == .files else {
             if !isEmbyLike, entry.isDirectory {
@@ -308,6 +336,16 @@ struct ServerBrowserView: View {
     }
 
     private func play(_ entry: MediaEntry) {
+        if server.type == "plex" {
+            pending = PlayRequest(
+                url: entry.url,
+                name: entry.name,
+                headers: plex?.mediaHeaders() ?? [:],
+                positionMs: entry.positionMs,
+                queue: siblings
+            )
+            return
+        }
         if server.type == "ftp" {
             Task { await playOverFTP(entry) }
             return
@@ -409,6 +447,19 @@ struct ServerBrowserView: View {
                     entries = try await client.resume()
                 case .latest:
                     entries = try await client.latest()
+                }
+            } else if server.type == "plex" {
+                let client = plex ?? PlexClient(server: server)
+                plex = client
+                if plexLibraries.isEmpty { plexLibraries = try await client.libraries() }
+                switch strip {
+                case .files:
+                    let section = path.isEmpty ? (plexLibraries.first?.id ?? "") : path
+                    entries = try await client.items(section: section).map { plexEntry($0, client: client) }
+                case .resume:
+                    entries = try await client.onDeck().map { plexEntry($0, client: client) }
+                case .latest:
+                    entries = try await client.recentlyAdded().map { plexEntry($0, client: client) }
                 }
             } else if server.type == "ftp" {
                 guard let target = FTPTarget(server: server) else { throw ServerError.badAddress }
