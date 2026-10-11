@@ -10,9 +10,12 @@ plugins {
 // When absent the release build stays unsigned instead of failing the build.
 val ksFile = System.getenv("APP_KEYSTORE") ?: (project.findProperty("app.keystore") as String?)
 val ksPass = System.getenv("APP_KEYSTORE_PASSWORD") ?: (project.findProperty("app.keystore.password") as String?)
-val keyAlias = System.getenv("APP_KEY_ALIAS") ?: (project.findProperty("app.key.alias") as String?)
-val keyPass = System.getenv("APP_KEY_PASSWORD") ?: (project.findProperty("app.key.password") as String?)
-val signingReady = !ksFile.isNullOrBlank() && !ksPass.isNullOrBlank() && !keyAlias.isNullOrBlank() && !keyPass.isNullOrBlank()
+// NOTE: keep these names distinct from the SigningConfig properties, otherwise
+// "keyAlias = keyAlias" resolves the right-hand side to the property itself and
+// Gradle fails with: SigningConfig "release" is missing required property "keyAlias".
+val aliasName = System.getenv("APP_KEY_ALIAS") ?: (project.findProperty("app.key.alias") as String?)
+val aliasPassword = System.getenv("APP_KEY_PASSWORD") ?: (project.findProperty("app.key.password") as String?)
+val signingReady = !ksFile.isNullOrBlank() && !ksPass.isNullOrBlank() && !aliasName.isNullOrBlank() && !aliasPassword.isNullOrBlank()
 
 android {
     namespace = "com.senplay"
@@ -32,8 +35,8 @@ android {
             create("release") {
                 storeFile = file(ksFile!!)
                 storePassword = ksPass
-                this.keyAlias = keyAlias
-                keyPassword = keyPass
+                keyAlias = aliasName
+                keyPassword = aliasPassword
                 storeType = "PKCS12"
                 enableV1Signing = true
                 enableV2Signing = true
