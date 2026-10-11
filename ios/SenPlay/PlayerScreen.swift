@@ -34,7 +34,7 @@ final class SubtitleController: ObservableObject {
         return String(data: data, encoding: .isoLatin1) ?? ""
     }
 
-    static func parse(_ raw: String) -> [Cue] {
+    private static func parse(_ raw: String) -> [Cue] {
         var cues: [Cue] = []
         let normalized = raw.replacingOccurrences(of: "\r\n", with: "\n")
         for block in normalized.components(separatedBy: "\n\n") {
