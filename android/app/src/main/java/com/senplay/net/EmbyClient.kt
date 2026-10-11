@@ -24,6 +24,22 @@ class EmbyClient(private val server: ServerConfig) {
      * Emby lists everyone credited; the app only has room for a few names, and the
      * order it returns is the billing order.
      */
+    /**
+     * The first video stream of the first media source. Emby nests the interesting
+     * fields one level deeper than the item itself.
+     */
+    private fun videoStream(item: org.json.JSONObject): org.json.JSONObject? {
+        val sources = item.optJSONArray("MediaSources") ?: return null
+        for (index in 0 until sources.length()) {
+            val streams = sources.optJSONObject(index)?.optJSONArray("MediaStreams") ?: continue
+            for (streamIndex in 0 until streams.length()) {
+                val stream = streams.optJSONObject(streamIndex) ?: continue
+                if (stream.optString("Type") == "Video") return stream
+            }
+        }
+        return null
+    }
+
     private fun castOf(item: org.json.JSONObject, limit: Int = 4): List<String> {
         val people = item.optJSONArray("People") ?: return emptyList()
         val names = mutableListOf<String>()
@@ -173,6 +189,13 @@ class EmbyClient(private val server: ServerConfig) {
                     unplayedCount = userData?.optInt("UnplayedItemCount") ?: 0,
                     episodeNumber = item.optInt("IndexNumber"),
                     cast = castOf(item),
+                    width = videoStream(item)?.optInt("Width") ?: 0,
+                    height = videoStream(item)?.optInt("Height") ?: 0,
+                    frameRate = videoStream(item)?.let {
+                        val real = it.optDouble("RealFrameRate", 0.0)
+                        if (real > 0) real else it.optDouble("AverageFrameRate", 0.0)
+                    } ?: 0.0,
+                    videoRange = videoStream(item)?.optString("VideoRange").orEmpty(),
                     modifiedAt = dateMillis(item.optString("DateModified")),
                     durationTicks = item.optLong("RunTimeTicks"),
                     played = userData?.optBoolean("Played") ?: false,

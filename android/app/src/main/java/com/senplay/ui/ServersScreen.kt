@@ -615,6 +615,13 @@ private class ListDisplay(store: LibraryStore) {
     val showFolderTime = store.prefBool("list.showFolderTime", false)
     /** "显示剩余播放数量" — a count of remaining items, not a duration. */
     val showRemainingCount = store.prefBool("library.showRemaining", true)
+    /** "分辨率" and "分辨率简化显示" are one row in two spellings. */
+    val showResolution = store.prefBool("list.showResolution", true)
+    val simplifyResolution = store.prefBool("list.simplifyResolution", true)
+    /** "HDR标记" */
+    val showHDRTag = store.prefBool("list.showHDRTag", true)
+    /** "帧率" */
+    val showFrameRate = store.prefBool("list.showFrameRate", true)
     /** "显示选集指示器" */
     val showEpisodeIndicator = store.prefBool("library.showEpisodeIndicator", true)
     /** "显示演职人员" */
@@ -659,6 +666,16 @@ private fun rowDetail(entry: MediaEntry, display: ListDisplay): String? {
         if (display.showSize && entry.size > 0) {
             parts += android.text.format.Formatter.formatFileSize(null, entry.size)
         }
+        if (display.showHDRTag && entry.videoRange.isNotBlank() && entry.videoRange != "SDR") {
+            parts += entry.videoRange.uppercase()
+        }
+        if (display.showResolution && entry.width > 0 && entry.height > 0) {
+            parts += if (display.simplifyResolution) shortResolution(entry.height)
+            else "${entry.width}×${entry.height}"
+        }
+        if (display.showFrameRate && entry.frameRate > 0) {
+            parts += "%.2f fps".format(entry.frameRate)
+        }
         if (display.showEpisodeIndicator && entry.episodeNumber > 0) {
             parts += "第 ${entry.episodeNumber} 集"
         }
@@ -669,6 +686,17 @@ private fun rowDetail(entry: MediaEntry, display: ListDisplay): String? {
             .format(java.util.Date(entry.modifiedAt))
     }
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
+}
+
+/** Height alone, which is how people quote a resolution: "1080p". */
+private fun shortResolution(height: Int): String = when (height) {
+    4320 -> "8K"
+    2160 -> "4K"
+    1440 -> "1440p"
+    1080 -> "1080p"
+    720 -> "720p"
+    480 -> "480p"
+    else -> "${height}p"
 }
 
 private fun clock(millis: Long): String {

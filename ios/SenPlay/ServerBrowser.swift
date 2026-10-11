@@ -20,6 +20,14 @@ private struct ListDisplay {
     var showItemCount = true
     /// "显示剩余播放数量" — a count of remaining items, not a duration.
     var showRemainingCount = true
+    /// "分辨率" and "分辨率简化显示" are one row in two spellings: the simplified
+    /// form wins when both are on, because showing both would be noise.
+    var showResolution = true
+    var simplifyResolution = true
+    /// "HDR标记"
+    var showHDRTag = true
+    /// "帧率"
+    var showFrameRate = true
     /// "显示选集指示器"
     var showEpisodeIndicator = true
     /// "显示演职人员"
@@ -48,6 +56,10 @@ private struct ListDisplay {
         showEpisodeIndicator =
             defaults.object(forKey: "pref.library.showEpisodeIndicator") as? Bool ?? true
         showCast = defaults.object(forKey: "pref.library.showCast") as? Bool ?? true
+        showResolution = defaults.object(forKey: "pref.list.showResolution") as? Bool ?? true
+        simplifyResolution = defaults.object(forKey: "pref.list.simplifyResolution") as? Bool ?? true
+        showHDRTag = defaults.object(forKey: "pref.list.showHDRTag") as? Bool ?? true
+        showFrameRate = defaults.object(forKey: "pref.list.showFrameRate") as? Bool ?? true
         rounded = defaults.object(forKey: "pref.list.rounded") as? Bool ?? true
         ellipsisMode = defaults.string(forKey: "pref.list.ellipsis") ?? "middle"
         fullNameOnMenu = defaults.object(forKey: "pref.list.fullNameOnMenu") as? Bool ?? false
@@ -443,6 +455,17 @@ struct ServerBrowserView: View {
                 parts.append(ByteCountFormatter.string(fromByteCount: Int64(entry.size),
                                                        countStyle: .file))
             }
+            if display.showHDRTag, !entry.videoRange.isEmpty, entry.videoRange != "SDR" {
+                parts.append(entry.videoRange.uppercased())
+            }
+            if display.showResolution, entry.width > 0, entry.height > 0 {
+                parts.append(display.simplifyResolution
+                    ? Self.shortResolution(entry.height)
+                    : "\(entry.width)×\(entry.height)")
+            }
+            if display.showFrameRate, entry.frameRate > 0 {
+                parts.append(String(format: "%.2f fps", entry.frameRate))
+            }
             if display.showEpisodeIndicator, entry.episodeNumber > 0 {
                 parts.append("第 \(entry.episodeNumber) 集")
             }
@@ -462,6 +485,20 @@ struct ServerBrowserView: View {
 
     private static func shortDate(_ date: Date) -> String {
         shortDateFormatter.string(from: date)
+    }
+
+    /// Height alone, which is how people quote a resolution: "1080p". Anything above
+    /// 1080 keeps its full name because "2160p" is less common than "4K".
+    private static func shortResolution(_ height: Int) -> String {
+        switch height {
+        case 4320: return "8K"
+        case 2160: return "4K"
+        case 1440: return "1440p"
+        case 1080: return "1080p"
+        case 720: return "720p"
+        case 480: return "480p"
+        default: return "\(height)p"
+        }
     }
 
     private static func clock(_ seconds: Double) -> String {

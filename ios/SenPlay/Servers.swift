@@ -305,6 +305,20 @@ final class EmbyClient {
             .map { $0 }
     }
 
+    /// The first video stream of the first media source. Emby nests the interesting
+    /// fields one level deeper than the item itself, and a version with several
+    /// sources lists them in the order the server prefers.
+    static func videoStream(from item: [String: Any]) -> [String: Any]? {
+        let sources = item["MediaSources"] as? [[String: Any]] ?? []
+        for source in sources {
+            let streams = source["MediaStreams"] as? [[String: Any]] ?? []
+            if let video = streams.first(where: { ($0["Type"] as? String) == "Video" }) {
+                return video
+            }
+        }
+        return nil
+    }
+
     static func entry(from item: [String: Any], server: ServerConfig, token: String) -> MediaEntry? {
         guard let id = item["Id"] as? String else { return nil }
         let type = item["Type"] as? String ?? ""
@@ -322,6 +336,11 @@ final class EmbyClient {
             modifiedAt: EmbyClient.date(item["DateModified"]),
             episodeNumber: item["IndexNumber"] as? Int ?? 0,
             cast: EmbyClient.cast(from: item),
+            width: (EmbyClient.videoStream(from: item)?["Width"] as? Double).map(Int.init) ?? 0,
+            height: (EmbyClient.videoStream(from: item)?["Height"] as? Double).map(Int.init) ?? 0,
+            frameRate: (EmbyClient.videoStream(from: item)?["RealFrameRate"] as? Double)
+                ?? (EmbyClient.videoStream(from: item)?["AverageFrameRate"] as? Double) ?? 0,
+            videoRange: EmbyClient.videoStream(from: item)?["VideoRange"] as? String ?? "",
             entryId: id,
             imageURL: Urls.join(server.address, "/Items/\(id)/Images/Primary?maxHeight=400&api_key=\(token)"),
             isPlayed: played,

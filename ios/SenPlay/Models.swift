@@ -30,6 +30,13 @@ struct MediaEntry: Identifiable, Hashable {
     let episodeNumber: Int
     /// First few cast names, for "显示演职人员". Empty when the source sends none.
     let cast: [String]
+    /// Video dimensions from the first video stream. Zero when the source sends none,
+    /// which is usual for anything that is not a media-server item.
+    let width: Int
+    let height: Int
+    let frameRate: Double
+    /// "HDR" / "SDR" / "DolbyVision" as the server reports it, empty when absent.
+    let videoRange: String
     let entryId: String?
     let imageURL: String?
     /// Server-reported watch state, used by the poster wall and the resume strip.
@@ -50,6 +57,10 @@ struct MediaEntry: Identifiable, Hashable {
         modifiedAt: Date? = nil,
         episodeNumber: Int = 0,
         cast: [String] = [],
+        width: Int = 0,
+        height: Int = 0,
+        frameRate: Double = 0,
+        videoRange: String = "",
         entryId: String? = nil,
         imageURL: String? = nil,
         isPlayed: Bool = false,
@@ -69,6 +80,10 @@ struct MediaEntry: Identifiable, Hashable {
         self.modifiedAt = modifiedAt
         self.episodeNumber = episodeNumber
         self.cast = cast
+        self.width = width
+        self.height = height
+        self.frameRate = frameRate
+        self.videoRange = videoRange
         self.entryId = entryId
         self.imageURL = imageURL
         self.isPlayed = isPlayed

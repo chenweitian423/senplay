@@ -29,6 +29,12 @@ data class MediaEntry(
     val episodeNumber: Int = 0,
     /** First few cast names, for "显示演职人员". Empty when the source sends none. */
     val cast: List<String> = emptyList(),
+    /** Video dimensions from the first video stream. Zero when the source sends none. */
+    val width: Int = 0,
+    val height: Int = 0,
+    val frameRate: Double = 0.0,
+    /** "HDR" / "SDR" / "DolbyVision" as the server reports it, empty when absent. */
+    val videoRange: String = "",
     val durationTicks: Long = 0L,
     val played: Boolean = false,
     /** Server-reported resume position, used by the poster wall and resume strip. */
