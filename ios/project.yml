@@ -6,6 +6,11 @@ options:
   createIntermediateGroups: true
   generateEmptyDirectories: true
 
+packages:
+  KSPlayer:
+    url: https://github.com/kingslay/KSPlayer
+    from: "2.3.4"
+
 settings:
   base:
     MARKETING_VERSION: "1.1.0"
@@ -19,6 +24,9 @@ targets:
     platform: iOS
     sources:
       - path: SenPlay
+    dependencies:
+      - package: KSPlayer
+        product: KSPlayer
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.senplay.player

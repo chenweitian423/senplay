@@ -1,8 +1,9 @@
 import AVKit
+import KSPlayer
 import SwiftUI
 import UIKit
 
-// MARK: - Preferences keys shared with Preferences.swift
+// MARK: - Preference keys shared with Preferences.swift
 
 enum PrefKey {
     // 播放
@@ -82,10 +83,23 @@ enum GestureAction: String, CaseIterable, Identifiable {
     }
 }
 
-// MARK: - Side-loaded subtitle support (SRT / WebVTT)
+enum AspectMode: String, CaseIterable, Identifiable {
+    case fit, fill, stretch
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .fit: return "适应屏幕"
+        case .fill: return "裁剪全屏"
+        case .stretch: return "拉伸铺满"
+        }
+    }
+}
+
+// MARK: - Side-loaded subtitle overlay
 //
-// Rendered as an overlay because AVFoundation only exposes legible tracks for
-// HLS streams and for side-loaded tracks it manages itself.
+// The kernel renders embedded tracks (including ASS effects) on its own surface.
+// This controller only covers the external-file case, rendered as an overlay so a
+// side-loaded SRT works even when the demuxer reports no subtitle stream.
 
 final class SubtitleController: ObservableObject {
     @Published var currentText: String = ""
@@ -98,6 +112,7 @@ final class SubtitleController: ObservableObject {
 
     private var cues: [Cue] = []
     private var timer: Timer?
+    private var lastIndex = 0
 
     func load(urlString: String) async {
         let text: String?
@@ -108,7 +123,10 @@ final class SubtitleController: ObservableObject {
         }
         guard let raw = text else { return }
         let parsed = SubtitleController.parse(raw)
-        await MainActor.run { self.cues = parsed }
+        await MainActor.run {
+            self.cues = parsed
+            self.lastIndex = 0
+        }
     }
 
     private func fetch(_ urlString: String) async throws -> String {
@@ -126,7 +144,8 @@ final class SubtitleController: ObservableObject {
             guard let timeLine = lines.first(where: { $0.contains("-->") }) else { continue }
             let parts = timeLine.components(separatedBy: "-->")
             guard parts.count == 2 else { continue }
-            guard let start = SubtitleController.seconds(parts[0]), let end = SubtitleController.seconds(parts[1]) else { continue }
+            guard let start = SubtitleController.seconds(parts[0]),
+                  let end = SubtitleController.seconds(parts[1]) else { continue }
             let body = lines.filter { !$0.contains("-->") && !$0.hasPrefix("WEBVTT") && Int($0) == nil }
             let text = body.joined(separator: "\n")
             if !text.isEmpty {
@@ -146,52 +165,152 @@ final class SubtitleController: ObservableObject {
         return hours * 3600 + minutes * 60 + secondsPart
     }
 
-    func attach(to player: AVPlayer) {
-        timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            let now = CMTimeGetSeconds(player.currentTime())
-            guard now.isFinite else { return }
-            let match = self.cues.first { now >= $0.start && now <= $0.end }
-            let text = match?.text ?? ""
-            if text != self.currentText {
-                DispatchQueue.main.async { self.currentText = text }
-            }
+    /// Advances the overlay from the kernel's own time callback, so there is no
+    /// second polling timer fighting the player.
+    func tick(at seconds: Double) {
+        guard !cues.isEmpty, seconds.isFinite else { return }
+        if lastIndex < cues.count, seconds > cues[lastIndex].end {
+            while lastIndex < cues.count, seconds > cues[lastIndex].end { lastIndex += 1 }
+        }
+        while lastIndex > 0, seconds < cues[lastIndex - 1].start { lastIndex -= 1 }
+        let text: String
+        if lastIndex < cues.count, seconds >= cues[lastIndex].start, seconds <= cues[lastIndex].end {
+            text = cues[lastIndex].text
+        } else {
+            text = ""
+        }
+        if text != currentText {
+            currentText = text
         }
     }
 
     func stop() {
         timer?.invalidate()
         timer = nil
+        cues = []
+        currentText = ""
     }
 }
 
-// MARK: - Bare AVPlayerLayer host
+// MARK: - Kernel bridge
 //
-// `VideoPlayer` always installs the system control bar, which we must replace,
-// so the render surface is hosted directly.
+// Drives KSPlayerLayer directly so the control bar and gesture layer below stay
+// ours. KSPlayer 2.3.4 ships its own tool bar; we never mount it.
 
-struct PlayerSurface: UIViewRepresentable {
-    let player: AVPlayer
-    var gravity: AVLayerVideoGravity = .resizeAspect
+final class KernelPlayer: NSObject, ObservableObject {
+    @Published var state: KSPlayerState = .initialized
+    @Published var currentTime: TimeInterval = 0
+    @Published var totalTime: TimeInterval = 0
+    @Published var bufferingProgress: Int = 0
+    @Published var mediaTitle: String?
+    @Published var dynamicInfo: String?
 
-    final class View: UIView {
-        override static var layerClass: AnyClass { AVPlayerLayer.self }
-        var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
-        init(player: AVPlayer) {
-            super.init(frame: .zero)
-            backgroundColor = .black
-            playerLayer.player = player
-            playerLayer.videoGravity = .resizeAspect
-        }
-        required init?(coder: NSCoder) { fatalError("not used") }
+    let layer: KSPlayerLayer
+
+    var onTime: ((TimeInterval, TimeInterval) -> Void)?
+    var onFinish: (() -> Void)?
+
+    init(url: URL, options: KSOptions) {
+        layer = KSPlayerLayer(url: url, isAutoPlay: true, options: options, delegate: nil)
+        super.init()
+        layer.delegate = self
     }
 
-    func makeUIView(context: Context) -> View { View(player: player) }
+    var renderView: UIView? { layer.player.view }
+    var isPlaying: Bool { layer.player.isPlaying }
 
-    func updateUIView(_ uiView: View, context: Context) {
-        uiView.playerLayer.videoGravity = gravity
-        if uiView.playerLayer.player !== player { uiView.playerLayer.player = player }
+    func play() { layer.play() }
+    func pause() { layer.pause() }
+
+    func togglePlay() {
+        isPlaying ? pause() : play()
+    }
+
+    func seek(to time: TimeInterval) {
+        layer.seek(time: time, autoPlay: true) { _ in }
+    }
+
+    func setRate(_ rate: Float) { layer.player.playbackRate = rate }
+    func setVolume(_ volume: Float) { layer.player.playbackVolume = volume }
+    func setMuted(_ muted: Bool) { layer.player.isMuted = muted }
+    func setAspect(_ mode: AspectMode) {
+        switch mode {
+        case .fit: layer.player.contentMode = .scaleAspectFit
+        case .fill: layer.player.contentMode = .scaleAspectFill
+        case .stretch: layer.player.contentMode = .scaleToFill
+        }
+    }
+
+    func audioTracks() -> [MediaPlayerTrack] { layer.player.tracks(mediaType: .audio) }
+    func subtitleTracks() -> [MediaPlayerTrack] { layer.player.tracks(mediaType: .subtitle) }
+    func videoTracks() -> [MediaPlayerTrack] { layer.player.tracks(mediaType: .video) }
+
+    func select(_ track: some MediaPlayerTrack) {
+        layer.player.select(track: track)
+    }
+
+    func rateOptions() -> [Float] { [0.5, 0.75, 1, 1.25, 1.5, 2, 3] }
+
+    func capture() -> UIImage? {
+        guard let view = layer.player.view else { return nil }
+        let renderer = UIGraphicsImageRenderer(bounds: view.bounds)
+        return renderer.image { _ in
+            view.drawHierarchy(in: view.bounds, afterScreenUpdates: false)
+        }
+    }
+
+    func shutdown() {
+        layer.pause()
+        layer.delegate = nil
+    }
+}
+
+extension KernelPlayer: KSPlayerLayerDelegate {
+    func player(layer: KSPlayerLayer, state: KSPlayerState) {
+        self.state = state
+        bufferingProgress = layer.bufferingProgress
+        if state == .bufferFinished || state == .buffering {
+            mediaTitle = layer.player.dynamicInfo?.metadata["title"]
+            if let info = layer.player.dynamicInfo {
+                dynamicInfo = String(format: "%.1f fps · %d kbps",
+                                     info.displayFPS, info.videoBitrate / 1000)
+            }
+        }
+    }
+
+    func player(layer: KSPlayerLayer, currentTime: TimeInterval, totalTime: TimeInterval) {
+        self.currentTime = currentTime
+        if totalTime > 0 { self.totalTime = totalTime }
+        onTime?(currentTime, totalTime)
+    }
+
+    func player(layer: KSPlayerLayer, finish error: Error?) {
+        if error != nil {
+            state = .error
+        } else {
+            state = .playedToTheEnd
+        }
+        onFinish?()
+    }
+
+    func player(layer: KSPlayerLayer, bufferedCount: Int, consumeTime: TimeInterval) {}
+}
+
+/// Hosts the kernel's render surface. Ownership of the control surface stays with
+/// the SwiftUI layers above, so this bridge does nothing but forward the view.
+struct KernelSurface: UIViewRepresentable {
+    let player: KernelPlayer
+
+    func makeUIView(context: Context) -> UIView {
+        player.renderView ?? UIView()
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        if let live = player.renderView, live !== uiView, uiView.subviews.isEmpty {
+            uiView.addSubview(live)
+            live.frame = uiView.bounds
+            live.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        }
     }
 }
 
@@ -210,6 +329,14 @@ private struct PlayerHUD: Equatable {
     var text: String
 }
 
+private struct TrackRow: Identifiable {
+    let id: Int
+    let title: String
+    let subtitle: String
+    let selected: Bool
+    let name: String
+}
+
 struct PlayerScreen: View {
     let request: PlayRequest
     var onClose: (Double) -> Void = { _ in }
@@ -222,6 +349,7 @@ struct PlayerScreen: View {
     @AppStorage(PrefKey.timeMode) private var timeMode = "total"
     @AppStorage(PrefKey.autoHideSeconds) private var autoHideSeconds = 3
     @AppStorage(PrefKey.fastSeekButtons) private var fastSeekButtons = false
+    @AppStorage(PrefKey.switchMediaButton) private var switchMediaButton = true
     @AppStorage(PrefKey.screenshotButton) private var screenshotButton = true
     @AppStorage(PrefKey.doubleLeftAction) private var doubleLeftAction = GestureAction.backward.rawValue
     @AppStorage(PrefKey.doubleRightAction) private var doubleRightAction = GestureAction.forward.rawValue
@@ -231,10 +359,14 @@ struct PlayerScreen: View {
     @AppStorage(PrefKey.rememberZoomSize) private var rememberZoomSize = true
     @AppStorage(PrefKey.useAppBrightness) private var useAppBrightness = false
     @AppStorage(PrefKey.subtitleScale) private var subtitleScale = 1.0
+    @AppStorage(PrefKey.subtitleMask) private var subtitleMask = false
     @AppStorage(PrefKey.jpegQuality) private var jpegQuality = 0.8
+    @AppStorage(PrefKey.preferHardwareDecode) private var preferHardwareDecode = true
+    @AppStorage(PrefKey.rememberAudioTrack) private var rememberAudioTrack = true
+    @AppStorage(PrefKey.rememberSubtitleTrack) private var rememberSubtitleTrack = true
 
-    @State private var player = AVPlayer()
     @StateObject private var subtitles = SubtitleController()
+    @State private var kernel: KernelPlayer?
 
     @State private var controlsVisible = true
     @State private var isPlaying = true
@@ -245,7 +377,8 @@ struct PlayerScreen: View {
     @State private var speed: Float = 1
     @State private var zoom: CGFloat = 1
     @State private var volume: Double = 1
-    @State private var brightness: Double = -1
+    @State private var brightness: Double = 0.5
+    @State private var aspect: AspectMode = .fit
     @State private var dragMode: DragMode = .none
     @State private var dragStartTime: Double = 0
     @State private var dragStartVolume: Double = 1
@@ -253,19 +386,34 @@ struct PlayerScreen: View {
     @State private var longPressSpeedActive = false
     @State private var hud: PlayerHUD?
     @State private var toast: String?
-    @State private var timeObserver: Any?
-    @State private var endObserver: NSObjectProtocol?
     @State private var hideTask: DispatchWorkItem?
+    @State private var activePanel: PanelKind?
 
     private let speeds: [Float] = [0.5, 0.75, 1, 1.25, 1.5, 2, 3]
+
+    private enum PanelKind: String, Identifiable {
+        case subtitle, audio, aspect, more
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .subtitle: return "字幕"
+            case .audio: return "音轨"
+            case .aspect: return "画面比例"
+            case .more: return "更多"
+            }
+        }
+    }
 
     var body: some View {
         GeometryReader { geo in
             ZStack {
                 Color.black.ignoresSafeArea()
-                PlayerSurface(player: player)
-                    .ignoresSafeArea()
-                    .scaleEffect(zoom)
+
+                if let kernel {
+                    KernelSurface(player: kernel)
+                        .ignoresSafeArea()
+                        .scaleEffect(zoom)
+                }
 
                 if !subtitles.currentText.isEmpty {
                     VStack {
@@ -278,16 +426,14 @@ struct PlayerScreen: View {
                             .padding(.vertical, 6)
                             .background(Color.black.opacity(0.55))
                             .cornerRadius(6)
-                            .padding(.bottom, 78)
+                            .padding(.bottom, subtitleMask ? 110 : 78)
                     }
                     .allowsHitTesting(false)
                 }
 
                 gestureLayer(size: geo.size)
 
-                if let hud {
-                    hudView(hud)
-                }
+                if let hud { hudView(hud) }
 
                 if let toast {
                     VStack {
@@ -305,15 +451,18 @@ struct PlayerScreen: View {
                 }
 
                 if controlsVisible {
-                    controls(size: geo.size)
+                    controls()
                         .transition(.opacity)
+                }
+
+                if let panel = activePanel {
+                    panelOverlay(panel)
                 }
             }
         }
         .statusBar(hidden: true)
         .onAppear(perform: start)
         .onDisappear(perform: finish)
-        .onTapGesture { toggleControls() }
     }
 
     // MARK: gestures
@@ -322,13 +471,13 @@ struct PlayerScreen: View {
         HStack(spacing: 0) {
             Color.clear
                 .contentShape(Rectangle())
-                .onTapGesture(count: 2) { perform(doubleLeftAction, at: CGPoint(x: 0, y: 0)) }
+                .onTapGesture(count: 2) { perform(doubleLeftAction) }
             Color.clear
                 .contentShape(Rectangle())
-                .onTapGesture(count: 2) { perform(doubleCenterAction, at: CGPoint(x: 0, y: 0)) }
+                .onTapGesture(count: 2) { perform(doubleCenterAction) }
             Color.clear
                 .contentShape(Rectangle())
-                .onTapGesture(count: 2) { perform(doubleRightAction, at: CGPoint(x: 0, y: 0)) }
+                .onTapGesture(count: 2) { perform(doubleRightAction) }
         }
         .simultaneousGesture(
             DragGesture(minimumDistance: 18)
@@ -349,10 +498,11 @@ struct PlayerScreen: View {
                 .onEnded { _ in
                     guard !longPressSpeedActive else { return }
                     longPressSpeedActive = true
-                    player.rate = 2
+                    kernel?.setRate(2)
                     hud = PlayerHUD(symbol: "forward.fill", text: "2.00x")
                 }
         )
+        .onTapGesture { toggleControls() }
     }
 
     private func handleDrag(_ value: DragGesture.Value, size: CGSize) {
@@ -389,7 +539,7 @@ struct PlayerScreen: View {
         case .volume:
             let next = min(max(dragStartVolume - Double(dy) / 400, 0), 1)
             volume = next
-            player.volume = Float(next)
+            kernel?.setVolume(Float(next))
             hud = PlayerHUD(symbol: "speaker.wave.2.fill", text: "\(Int(next * 100))%")
 
         case .none:
@@ -399,46 +549,34 @@ struct PlayerScreen: View {
 
     private func handleDragEnd() {
         if dragMode == .seeking, scrubbing {
-            if accurateSeek {
-                let tolerance = CMTime(seconds: 0.01, preferredTimescale: 600)
-                player.seek(to: CMTime(seconds: scrubTarget, preferredTimescale: 600),
-                            toleranceBefore: tolerance, toleranceAfter: tolerance)
-            } else {
-                player.seek(to: CMTime(seconds: scrubTarget, preferredTimescale: 600))
-            }
+            kernel?.seek(to: scrubTarget)
             currentTime = scrubTarget
         }
         dragMode = .none
         scrubbing = false
         longPressSpeedActive = false
-        if player.rate != speed { player.rate = speed }
+        kernel?.setRate(speed)
         scheduleHUDClear()
     }
 
-    private func perform(_ actionRaw: String, at point: CGPoint) {
+    private func perform(_ actionRaw: String) {
         let action = GestureAction(rawValue: actionRaw) ?? .none
         switch action {
-        case .playPause:
-            togglePlayPause()
+        case .playPause: togglePlayPause()
         case .fullscreen:
-            toast = "全屏已在播放器内呈现"
+            toast = "全屏由窗口承载"
             scheduleToastClear()
-        case .toggleControls:
-            toggleControls()
-        case .forward:
-            seek(by: Double(forwardSeconds))
-        case .backward:
-            seek(by: -Double(backwardSeconds))
-        case .brightness, .volume, .speed:
-            toggleControls()
-        case .none:
-            break
+        case .toggleControls: toggleControls()
+        case .forward: seek(by: Double(forwardSeconds))
+        case .backward: seek(by: -Double(backwardSeconds))
+        case .brightness, .volume, .speed: toggleControls()
+        case .none: break
         }
     }
 
     // MARK: controls
 
-    private func controls(size: CGSize) -> some View {
+    private func controls() -> some View {
         VStack {
             HStack(spacing: 12) {
                 Button { close() } label: {
@@ -450,10 +588,17 @@ struct PlayerScreen: View {
                         .clipShape(Circle())
                 }
 
-                Text(request.name)
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(request.name)
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    if let info = kernel?.dynamicInfo {
+                        Text(info)
+                            .font(.caption2)
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                }
 
                 Spacer()
 
@@ -468,14 +613,8 @@ struct PlayerScreen: View {
                     }
                 }
 
-                Menu {
-                    Button { captureFrame() } label: { Label("截图", systemImage: "camera") }
-                    Button { subtitles.currentText = "" } label: { Label("关闭字幕", systemImage: "captions.bubble") }
-                    Button { toast = "当前媒体信息：\(timecode(duration))" ; scheduleToastClear() } label: {
-                        Label("媒体信息", systemImage: "info.circle")
-                    }
-                } label: {
-                    Image(systemName: "list.bullet")
+                Button { activePanel = .more } label: {
+                    Image(systemName: "ellipsis")
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(.white)
                         .padding(9)
@@ -501,7 +640,7 @@ struct PlayerScreen: View {
                         .foregroundColor(.white)
                 }
 
-                HStack(spacing: 22) {
+                HStack(spacing: 20) {
                     Button { close() } label: { Image(systemName: "xmark") }
                     if fastSeekButtons {
                         Button { seek(by: -Double(backwardSeconds)) } label: { Image(systemName: "gobackward.15") }
@@ -513,6 +652,11 @@ struct PlayerScreen: View {
                     if fastSeekButtons {
                         Button { seek(by: Double(forwardSeconds)) } label: { Image(systemName: "goforward.15") }
                     }
+                    if switchMediaButton {
+                        Button { toast = "切换媒体"; scheduleToastClear() } label: {
+                            Image(systemName: "rectangle.stack")
+                        }
+                    }
 
                     Spacer()
 
@@ -520,7 +664,7 @@ struct PlayerScreen: View {
                         ForEach(speeds, id: \.self) { value in
                             Button(value == 1 ? "1.0x（默认）" : String(format: "%.2fx", value)) {
                                 speed = value
-                                player.rate = value
+                                kernel?.setRate(value)
                                 toast = String(format: "倍速 %.2fx", value)
                                 scheduleToastClear()
                             }
@@ -530,22 +674,13 @@ struct PlayerScreen: View {
                             .font(.system(size: 15, weight: .semibold))
                     }
 
-                    Button { toast = "字幕：外挂/内嵌切换（已就绪）"; scheduleToastClear() } label: {
-                        Image(systemName: "captions.bubble")
-                    }
-                    Button { toast = "音轨选择（已就绪）"; scheduleToastClear() } label: {
-                        Image(systemName: "waveform")
-                    }
-                    Menu {
-                        ForEach(speeds, id: \.self) { value in
-                            Button(String(format: "%.2fx", value)) { speed = value; player.rate = value }
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                    }
+                    Button { activePanel = .subtitle } label: { Image(systemName: "captions.bubble") }
+                    Button { activePanel = .audio } label: { Image(systemName: "waveform") }
+                    Button { activePanel = .aspect } label: { Image(systemName: "aspectratio") }
                 }
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.white)
+                .buttonStyle(.plain)
                 .padding(.horizontal, 18)
                 .padding(.bottom, 12)
             }
@@ -580,7 +715,7 @@ struct PlayerScreen: View {
                         scrubTarget = min(max(Double(value.location.x / max(geo.size.width, 1)) * total, 0), total)
                     }
                     .onEnded { _ in
-                        player.seek(to: CMTime(seconds: scrubTarget, preferredTimescale: 600))
+                        kernel?.seek(to: scrubTarget)
                         currentTime = scrubTarget
                         scrubbing = false
                         scheduleHide()
@@ -588,6 +723,182 @@ struct PlayerScreen: View {
             )
         }
         .frame(height: 20)
+    }
+
+    private func panelOverlay(_ panel: PanelKind) -> some View {
+        ZStack {
+            Color.black.opacity(0.001)
+                .ignoresSafeArea()
+                .onTapGesture { activePanel = nil }
+
+            VStack(spacing: 0) {
+                HStack {
+                    Text(panel.title).font(.headline).foregroundColor(.white)
+                    Spacer()
+                    Button { activePanel = nil } label: {
+                        Image(systemName: "xmark").foregroundColor(.white)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+
+                Divider().background(Color.white.opacity(0.2))
+
+                ScrollView {
+                    VStack(spacing: 0) {
+                        switch panel {
+                        case .subtitle:
+                            ForEach(subtitleRows()) { row in
+                                trackButton(row) { selectSubtitle(byName: row.name) }
+                            }
+                            if subtitleRows().isEmpty {
+                                Text("未检测到字幕轨").font(.footnote).foregroundColor(.secondary).padding()
+                            }
+                        case .audio:
+                            ForEach(audioRows()) { row in
+                                trackButton(row) { selectAudio(byName: row.name) }
+                            }
+                            if audioRows().isEmpty {
+                                Text("未检测到音轨").font(.footnote).foregroundColor(.secondary).padding()
+                            }
+                        case .aspect:
+                            ForEach(AspectMode.allCases) { mode in
+                                trackButton(TrackRow(id: mode.hashValue, title: mode.title,
+                                                     subtitle: "", selected: aspect == mode, name: mode.rawValue)) {
+                                    aspect = mode
+                                    kernel?.setAspect(mode)
+                                    activePanel = nil
+                                }
+                            }
+                        case .more:
+                            ForEach(infoRows().indices, id: \.self) { index in
+                                let line = infoRows()[index]
+                                HStack {
+                                    Text(line.0).foregroundColor(.white.opacity(0.75))
+                                    Spacer()
+                                    Text(line.1).foregroundColor(.white)
+                                }
+                                .font(.footnote)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                            }
+                        }
+                    }
+                }
+                .frame(maxHeight: 320)
+            }
+            .background(Color.black.opacity(0.92))
+            .cornerRadius(14)
+            .padding(.horizontal, 28)
+        }
+    }
+
+    private func trackButton(_ row: TrackRow, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(row.title).foregroundColor(.white).font(.subheadline)
+                    if !row.subtitle.isEmpty {
+                        Text(row.subtitle).foregroundColor(.white.opacity(0.6)).font(.caption2)
+                    }
+                }
+                Spacer()
+                if row.selected {
+                    Image(systemName: "checkmark").foregroundColor(.accentColor)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func trackRows(_ tracks: [MediaPlayerTrack], fallback: String) -> [TrackRow] {
+        tracks.enumerated().map { index, track in
+            let detail = [track.languageCode, "\(track.bitRate / 1000) kbps"]
+                .compactMap { $0 }
+                .filter { !$0.isEmpty }
+                .joined(separator: " · ")
+            return TrackRow(id: Int(track.trackID),
+                            title: track.name.isEmpty ? "\(fallback) \(index + 1)" : track.name,
+                            subtitle: detail,
+                            selected: track.isEnabled,
+                            name: track.name)
+        }
+    }
+
+    private func audioRows() -> [TrackRow] {
+        guard let kernel else { return [] }
+        return trackRows(kernel.audioTracks(), fallback: "音轨")
+    }
+
+    private func subtitleRows() -> [TrackRow] {
+        guard let kernel else { return [] }
+        return trackRows(kernel.subtitleTracks(), fallback: "字幕")
+    }
+
+    private func selectAudio(byName name: String) {
+        guard let kernel else { return }
+        if let track = kernel.audioTracks().first(where: { $0.name == name }) {
+            kernel.select(track)
+            toast = "已切换音轨：\(name)"
+            scheduleToastClear()
+        }
+        activePanel = nil
+    }
+
+    private func selectSubtitle(byName name: String) {
+        guard let kernel else { return }
+        if let track = kernel.subtitleTracks().first(where: { $0.name == name }) {
+            kernel.select(track)
+            toast = "已切换字幕：\(name)"
+            scheduleToastClear()
+        }
+        activePanel = nil
+    }
+
+    private func infoRows() -> [(String, String)] {
+        guard let kernel else { return [] }
+        let info = kernel.layer.player.dynamicInfo
+        let video = kernel.videoTracks().first
+        let audio = kernel.audioTracks().first
+        var rows: [(String, String)] = [
+            ("状态", String(describing: kernel.state)),
+            ("时长", timecode(kernel.totalTime)),
+            ("解码", preferHardwareDecode ? "硬件 (HW/GPU)" : "软件"),
+            ("缓冲", "\(kernel.bufferingProgress)%"),
+        ]
+        if let video {
+            if let fd = video.formatDescription {
+                let dims = CMVideoFormatDescriptionGetDimensions(fd)
+                rows.append(("分辨率", "\(dims.width)×\(dims.height)"))
+                rows.append(("视频编码", fourCC(CMFormatDescriptionGetMediaSubType(fd))))
+            }
+            rows.append(("帧率", String(format: "%.2f", video.nominalFrameRate)))
+            rows.append(("位深", "\(video.bitDepth)"))
+            if video.dovi != nil {
+                rows.append(("杜比视界", "已检测到 RPU"))
+            }
+        }
+        if let audio {
+            if let fd = audio.formatDescription {
+                rows.append(("音频编码", fourCC(CMFormatDescriptionGetMediaSubType(fd))))
+            }
+            rows.append(("音频码率", "\(audio.bitRate / 1000) kbps"))
+        }
+        if let info {
+            rows.append(("显示帧率", String(format: "%.1f", info.displayFPS)))
+            rows.append(("音画同步差", String(format: "%.1f ms", info.audioVideoSyncDiff)))
+            rows.append(("丢帧", "\(info.droppedVideoFrameCount + UInt32(info.droppedVideoPacketCount))"))
+            rows.append(("视频码率", "\(info.videoBitrate / 1000) kbps"))
+            rows.append(("音频码率", "\(info.audioBitrate / 1000) kbps"))
+            rows.append(("已读数据", ByteCountFormatter.string(fromByteCount: info.bytesRead, countStyle: .file)))
+        }
+        rows.append(("视频轨", String(kernel.videoTracks().count)))
+        rows.append(("音频轨", String(kernel.audioTracks().count)))
+        rows.append(("字幕轨", String(kernel.subtitleTracks().count)))
+        return rows
     }
 
     private func hudView(_ hud: PlayerHUD) -> some View {
@@ -606,14 +917,15 @@ struct PlayerScreen: View {
     // MARK: actions
 
     private func togglePlayPause() {
-        if isPlaying { player.pause() } else { player.play() }
+        kernel?.togglePlay()
         isPlaying.toggle()
         revealControls()
     }
 
     private func seek(by delta: Double) {
+        guard let kernel else { return }
         let target = min(max(currentTime + delta, 0), max(duration, 0))
-        player.seek(to: CMTime(seconds: target, preferredTimescale: 600))
+        kernel.seek(to: target)
         currentTime = target
         hud = PlayerHUD(symbol: delta >= 0 ? "goforward" : "gobackward", text: String(format: "%.0fs", delta))
         scheduleHUDClear()
@@ -649,6 +961,14 @@ struct PlayerScreen: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { toast = nil }
     }
 
+    /// Four-character code from a CoreMedia subtype, e.g. `avc1`, `hvc1`, `mp4a`.
+    private func fourCC(_ code: FourCharCode) -> String {
+        let bytes = [UInt8((code >> 24) & 0xFF), UInt8((code >> 16) & 0xFF),
+                     UInt8((code >> 8) & 0xFF), UInt8(code & 0xFF)]
+        let text = String(bytes: bytes, encoding: .ascii) ?? ""
+        return text.trimmingCharacters(in: .whitespaces).isEmpty ? "\(code)" : text
+    }
+
     private func timecode(_ seconds: Double) -> String {
         guard seconds.isFinite, seconds >= 0 else { return "00:00" }
         let total = Int(seconds.rounded())
@@ -657,81 +977,72 @@ struct PlayerScreen: View {
     }
 
     private func captureFrame() {
-        guard let asset = player.currentItem?.asset else { return }
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        let time = CMTime(seconds: currentTime, preferredTimescale: 600)
-        DispatchQueue.global(qos: .userInitiated).async {
-            guard let cg = try? generator.copyCGImage(at: time, actualTime: nil) else {
-                DispatchQueue.main.async { toast = "截图失败" }
-                return
-            }
-            let image = UIImage(cgImage: cg)
-            DispatchQueue.main.async {
-                UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
-                UIPasteboard.general.image = image
-                toast = "已保存截图"
-                scheduleToastClear()
-            }
+        guard let image = kernel?.capture() else {
+            toast = "截图失败"
+            scheduleToastClear()
+            return
         }
+        UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
+        UIPasteboard.general.image = image
+        toast = "已保存截图"
+        scheduleToastClear()
     }
 
     // MARK: lifecycle
 
     private func start() {
         guard let url = URL(string: request.url) else { return }
-        let item = AVPlayerItem(url: url)
-        player.replaceCurrentItem(with: item)
-        player.volume = Float(volume)
-        player.play()
-        isPlaying = true
 
-        if let subtitleURL = request.subtitleURL, !subtitleURL.isEmpty {
-            Task {
-                await subtitles.load(urlString: subtitleURL)
-                subtitles.attach(to: player)
-            }
+        let options = KSOptions()
+        options.isAccurateSeek = accurateSeek
+        options.hardwareDecode = preferHardwareDecode
+        options.userAgent = request.userAgent ?? "SenPlay/1.1 (iOS)"
+        options.registerRemoteControll = true
+        options.autoSelectEmbedSubtitle = true
+        options.isSeekedAutoPlay = true
+
+        let player = KernelPlayer(url: url, options: options)
+        player.onTime = { current, _ in
+            if !scrubbing { currentTime = current }
+            subtitles.tick(at: current)
         }
+        player.onFinish = {
+            isPlaying = false
+        }
+        kernel = player
+        isPlaying = true
+        volume = Double(player.layer.player.playbackVolume)
+        brightness = UIScreen.main.brightness
 
         let resume = request.positionMs > 0
             ? request.positionMs
             : (resumeFromLast ? LibraryStore.shared.savedPosition(url: request.url) : 0)
         if resume > 0 {
-            player.seek(to: CMTime(seconds: resume / 1000, preferredTimescale: 600))
+            player.seek(to: resume / 1000)
         }
 
-        timeObserver = player.addPeriodicTimeObserver(
-            forInterval: CMTime(seconds: 0.25, preferredTimescale: 600), queue: .main
-        ) { time in
-            let seconds = CMTimeGetSeconds(time)
-            if seconds.isFinite, !scrubbing { currentTime = seconds }
-            let total = CMTimeGetSeconds(player.currentItem?.duration ?? .zero)
-            if total.isFinite, total > 0 { duration = total }
+        if let subtitleURL = request.subtitleURL, !subtitleURL.isEmpty {
+            Task { await subtitles.load(urlString: subtitleURL) }
         }
-
-        endObserver = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main
-        ) { _ in isPlaying = false }
 
         scheduleHide()
     }
 
     private func finish() {
         subtitles.stop()
-        if let timeObserver { player.removeTimeObserver(timeObserver) }
-        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
-        let seconds = CMTimeGetSeconds(player.currentTime())
-        let total = CMTimeGetSeconds(player.currentItem?.duration ?? .zero)
+        guard let kernel else { return }
+        let seconds = kernel.currentTime
+        let total = kernel.totalTime
         if seconds.isFinite, total.isFinite, total > 0 {
             LibraryStore.shared.rememberProgress(url: request.url, name: request.name,
                                                  positionMs: seconds * 1000, durationMs: total * 1000)
         }
-        player.pause()
-        player.replaceCurrentItem(with: nil)
+        kernel.shutdown()
+        self.kernel = nil
     }
 
     private func close() {
-        let seconds = CMTimeGetSeconds(player.currentTime())
+        let seconds = kernel?.currentTime ?? 0
         onClose(seconds.isFinite ? seconds : 0)
     }
 }
