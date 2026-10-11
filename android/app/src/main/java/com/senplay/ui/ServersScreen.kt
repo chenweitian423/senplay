@@ -502,7 +502,7 @@ private fun ServerBrowserScreen(
                 items(visible, key = { it.url + it.name }) { entry ->
                     ListItem(
                         headlineContent = {
-                            Text(entry.name, maxLines = if (display.ellipsis) 1 else 2)
+                            Text(entry.name, maxLines = if (display.ellipsisMode == "none") 2 else 1)
                         },
                         supportingContent = {
                             val detail = rowDetail(entry, display)
@@ -609,6 +609,8 @@ private class ListDisplay(store: LibraryStore) {
     val showTitleCount = store.prefBool("list.showCount", false)
     /** Item counts in the list, from the library group. */
     val showItemCount = store.prefBool("library.showCount", true)
+    /** "菜单顶部显示完整名称" — off by default. */
+    val fullNameOnMenu = store.prefBool("list.fullNameOnMenu", false)
     /** "文件夹项目显示时间" */
     val showFolderTime = store.prefBool("list.showFolderTime", true)
     /** "显示剩余播放数量" — a count of remaining items, not a duration. */
@@ -617,7 +619,8 @@ private class ListDisplay(store: LibraryStore) {
     val showEpisodeIndicator = store.prefBool("library.showEpisodeIndicator", true)
     /** "显示演职人员" */
     val showCast = store.prefBool("library.showCast", true)
-    val ellipsis = store.prefBool("list.ellipsis", false)
+    /** "中间" / "左边" / "右边" — a choice, not a switch. */
+    val ellipsisMode = store.prefString("list.ellipsis", "middle")
 
     // Poster marks: what the reference app puts on the artwork rather than in the
     // list row.
@@ -626,8 +629,8 @@ private class ListDisplay(store: LibraryStore) {
     val showRemaining = store.prefBool("library.showRemaining", true)
     val showMediaInfo = store.prefBool("library.showMediaInfo", true)
     val titleCentered = store.prefString("library.titleAlignment", "leading") == "center"
+    val showCollection = store.prefBool("library.showCollection", false)
     val showContinue = store.prefBool("library.showContinue", true)
-    val showCollection = store.prefBool("library.showCollection", true)
 
     /**
      * The strips whose section the viewer has not switched off. FILES and LATEST have

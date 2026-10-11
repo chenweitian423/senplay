@@ -13,7 +13,7 @@ private struct ListDisplay {
     var showSize = true
     var showDuration = true
     var showProgress = true
-    var showFolderTime = true
+    var showFolderTime = false
     /// Title bar only, and off by default: the reference app's "标题栏显示文件数量".
     var showTitleCount = false
     /// Item counts on the artwork, from the library group.
@@ -25,41 +25,39 @@ private struct ListDisplay {
     /// "显示演职人员"
     var showCast = true
     var rounded = true
-    var ellipsis = false
-    var fullNameOnMenu = true
+    /// "中间" / "左边" / "右边" — this is a choice, not a switch.
+    var ellipsisMode = "middle"
+    var fullNameOnMenu = false
     // Poster marks. These are the ones the reference app puts on the artwork rather
     // than in the list row.
     var showPlayedMark = true
     var showRating = true
-    var showRemaining = true
     var showMediaInfo = true
     var titleCentered = false
     var showContinue = true
-    var showCollection = true
+    var showCollection = false
 
     init(_ defaults: UserDefaults = .standard) {
         showSize = defaults.object(forKey: "pref.list.showSize") as? Bool ?? true
         showDuration = defaults.object(forKey: "pref.list.showDuration") as? Bool ?? true
         showProgress = defaults.object(forKey: "pref.list.showProgress") as? Bool ?? true
-        showFolderTime = defaults.object(forKey: "pref.list.showFolderTime") as? Bool ?? true
+        showFolderTime = defaults.object(forKey: "pref.list.showFolderTime") as? Bool ?? false
         showTitleCount = defaults.object(forKey: "pref.list.showCount") as? Bool ?? false
         showItemCount = defaults.object(forKey: "pref.library.showCount") as? Bool ?? true
-        showFolderTime = defaults.object(forKey: "pref.list.showFolderTime") as? Bool ?? true
         showRemainingCount = defaults.object(forKey: "pref.library.showRemaining") as? Bool ?? true
         showEpisodeIndicator =
             defaults.object(forKey: "pref.library.showEpisodeIndicator") as? Bool ?? true
         showCast = defaults.object(forKey: "pref.library.showCast") as? Bool ?? true
         rounded = defaults.object(forKey: "pref.list.rounded") as? Bool ?? true
-        ellipsis = defaults.object(forKey: "pref.list.ellipsis") as? Bool ?? false
-        fullNameOnMenu = defaults.object(forKey: "pref.list.fullNameOnMenu") as? Bool ?? true
+        ellipsisMode = defaults.string(forKey: "pref.list.ellipsis") ?? "middle"
+        fullNameOnMenu = defaults.object(forKey: "pref.list.fullNameOnMenu") as? Bool ?? false
         showPlayedMark = defaults.object(forKey: "pref.library.showPlayedMark") as? Bool ?? true
         showRating = defaults.object(forKey: "pref.library.showRating") as? Bool ?? true
-        showRemaining = defaults.object(forKey: "pref.library.showRemaining") as? Bool ?? true
         showMediaInfo = defaults.object(forKey: "pref.library.showMediaInfo") as? Bool ?? true
         titleCentered = (defaults.string(forKey: "pref.library.titleAlignment") ?? "leading")
             == "center"
         showContinue = defaults.object(forKey: "pref.library.showContinue") as? Bool ?? true
-        showCollection = defaults.object(forKey: "pref.library.showCollection") as? Bool ?? true
+        showCollection = defaults.object(forKey: "pref.library.showCollection") as? Bool ?? false
     }
 }
 
@@ -406,7 +404,7 @@ struct ServerBrowserView: View {
                         .frame(width: 24)
                 }
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(entry.name).lineLimit(display.ellipsis ? 1 : 2)
+                    Text(entry.name).lineLimit(display.ellipsisMode == "none" ? 2 : 1)
                     if !entry.subtitle.isEmpty {
                         Text(entry.subtitle).font(.caption2).foregroundColor(.secondary)
                     }
