@@ -59,11 +59,12 @@ import com.senplay.core.ServerConfig
 import com.senplay.net.EmbyClient
 import com.senplay.net.SmbTarget
 import com.senplay.net.WebDavClient
+import com.senplay.net.listFtpDirectory
 import com.senplay.net.listSmbDirectory
 import kotlinx.coroutines.launch
 import java.util.UUID
 
-private val SERVER_TYPES = listOf("webdav", "emby", "jellyfin", "feiniu", "smb")
+private val SERVER_TYPES = listOf("webdav", "emby", "jellyfin", "feiniu", "smb", "ftp")
 
 @Composable
 fun ServersScreen(store: LibraryStore, onPlay: (PlayRequest) -> Unit) {
@@ -198,6 +199,15 @@ private fun ServerBrowserScreen(
                         size = entry.size
                     )
                 }.sortedWith(compareByDescending<MediaEntry> { it.isDirectory }.thenBy { it.name })
+            } else if (server.type == "ftp") {
+                listFtpDirectory(server, path).map { entry ->
+                    MediaEntry(
+                        name = entry.name,
+                        url = "ftp://${server.address.removePrefix("ftp://").substringBefore('/')}${entry.url}",
+                        isDirectory = entry.isDirectory,
+                        size = entry.size
+                    )
+                }
             } else {
                 WebDavClient.list(server, path)
             }
@@ -332,10 +342,10 @@ private fun ServerBrowserScreen(
                 parentId = entry.entryId
             } else if (!server.isEmbyLike && entry.isDirectory) {
                 stack = stack + (path to parentId)
-                path = if (server.type == "smb") {
-                    entry.url.substringAfter("smb://").substringAfter('/', "")
-                } else {
-                    entry.url
+                path = when (server.type) {
+                    "smb" -> entry.url.substringAfter("smb://").substringAfter('/', "")
+                    "ftp" -> entry.url.substringAfter("ftp://").substringAfter('/', "/")
+                    else -> entry.url
                 }
             } else {
                 val subtitle = matchSubtitle(entry)

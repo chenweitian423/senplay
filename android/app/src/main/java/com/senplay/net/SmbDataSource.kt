@@ -201,7 +201,8 @@ object SmbCredentials {
  */
 class SchemeRoutingDataSourceFactory(
     private val http: DataSource.Factory,
-    private val smb: DataSource.Factory = SmbDataSourceFactory()
+    private val smb: DataSource.Factory = SmbDataSourceFactory(),
+    private val ftp: DataSource.Factory = FtpDataSourceFactory()
 ) : DataSource.Factory {
 
     override fun createDataSource(): DataSource = object : DataSource {
@@ -213,7 +214,11 @@ class SchemeRoutingDataSourceFactory(
         }
 
         override fun open(dataSpec: DataSpec): Long {
-            val target = if (dataSpec.uri.scheme.equals("smb", ignoreCase = true)) smb else http
+            val target = when {
+                dataSpec.uri.scheme.equals("smb", ignoreCase = true) -> smb
+                dataSpec.uri.scheme.equals("ftp", ignoreCase = true) -> ftp
+                else -> http
+            }
             val created = target.createDataSource()
             listeners.forEach { created.addTransferListener(it) }
             delegate = created
