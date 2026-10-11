@@ -104,3 +104,27 @@ keys with a real read on Android: 54
 `play.isoMode` / `useSystemProxy` / `pauseAutoLock`、`ui.controlBarStyle` /
 `showCloudThrottleTip`、`general.themeColor` / `defaultModule` / `iCloudSync`、
 音频组剩余的 `globalDelayMs`、弹幕组的 `font` / `keywords` / `convert` / `bottomToFloat`。
+
+## 取证材料里的一组键名（round 30）
+
+`main-strings.json` 里有一族以 `k` 开头的设置键名，把若干「含义不明」的条目一次定了性：
+
+| 取证键名 | 对应的设置项 | 结论 |
+|---|---|---|
+| `kEmbyShowMyMedia` | 显示我的媒体 | Emby 用户视图入口；本实现顶层就是它，无落点 |
+| `kEmbyShowRecommended` | 显示类似作品 | 确实是 Emby 的推荐功能，需要详情页 + `/Similar` 接口 |
+| `kEmbyShowCarousel` | （未实现的轮播） | 参考实现有而本实现没有的板块 |
+| `kEmbyHidePlayedInLatest` | （未实现的过滤） | 同上 |
+| `kEmbyDisplayPlayButton` | （未实现的按钮） | 同上 |
+| `kEmbyResumeShowEpisodeImage` | （未实现的封面策略） | 同上 |
+| `kEmbyTextAlignment` | 名称对齐方式 | 已接 |
+| `kSubtitleLoadRule` | 外挂字幕加载规则 | 已接（round 30） |
+| `kIsMemorySubtitleStream` | 记住所选字幕/音轨 | 需要把用户选择的轨写回存储 |
+| `kIgnoringSubtitleEffects` | 忽略 ASS/SRT 特效 | libass 从文件取样式，当前内核无落点 |
+| `kShowPlayerDlnaButton` | 播放器 DLNA 按钮 | 投屏入口 |
+
+没有出现 `preferredVersion` 的对应键名，选项集也不在字符串里——它要么是编译进二进制的
+枚举（字符串不以明文出现），要么由服务端驱动。**这是它仍然未实现的唯一原因**。
+
+**这张表的用途**：区分「参考实现有而我们没有的板块」与「同一功能的不同实现」。前者是
+能力缺口（`kEmbyShowCarousel` 那一组），后者是接线问题。

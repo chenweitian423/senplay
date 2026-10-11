@@ -632,6 +632,11 @@ struct ServerBrowserView: View {
     /// prefer them: Simplified Chinese first, then anything else, then only then a
     /// plain `.srt`.
     private func matchingSubtitle(for entry: MediaEntry, emby: EmbyClient?) -> String? {
+        // "外挂字幕加载规则". Manual means the viewer will pick one from the subtitle
+        // panel, so nothing is attached automatically.
+        let rule = UserDefaults.standard.string(forKey: PrefKey.subtitleLoadingRule) ?? "sameName"
+        if rule == "manual" { return nil }
+
         let subtitleExtensions: Set<String> = ["srt", "ass", "ssa", "vtt", "sub"]
         let stem = (entry.name as NSString).deletingPathExtension.lowercased()
 
@@ -639,6 +644,11 @@ struct ServerBrowserView: View {
             guard !candidate.isDirectory else { return false }
             let ext = (candidate.name as NSString).pathExtension.lowercased()
             guard subtitleExtensions.contains(ext) else { return false }
+            // "同文件夹所有字幕" widens the match to every subtitle beside the video.
+            // The player takes one track, so the widening shows up as a looser match
+            // rather than as several tracks; the reference app's wording implies the
+            // latter and this is the part of it the current model can hold.
+            if rule == "all" { return true }
             return (candidate.name as NSString).deletingPathExtension
                 .lowercased()
                 .hasPrefix(stem)

@@ -162,6 +162,10 @@ private fun ServerBrowserScreen(
     onPlay: (PlayRequest) -> Unit
 ) {
     val scope = rememberCoroutineScope()
+    // LocalContext.current is itself a composable read, so it has to be taken outside
+    // the remember block rather than inside it.
+    val context = LocalContext.current
+    val prefs = remember { LibraryStore.get(context) }
     var entries by remember { mutableStateOf<List<MediaEntry>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -382,12 +386,25 @@ private fun ServerBrowserScreen(
         // Sidecar subtitles sharing the media file's stem. Simplified Chinese wins,
         // then traditional, then anything else, then plain srt last.
         fun matchSubtitle(entry: MediaEntry): String? {
+            // "外挂字幕加载规则". Manual leaves the choice to the subtitle panel.
+            val rule = prefs.prefString("subtitle.loadingRule", "sameName")
+            if (rule == "manual") return null
+
             val stem = entry.name.substringBeforeLast('.', entry.name).lowercase()
             val extensions = setOf("srt", "ass", "ssa", "vtt", "sub")
             val candidates = entries.filter { candidate ->
-                !candidate.isDirectory &&
-                    candidate.name.substringAfterLast('.', "").lowercase() in extensions &&
-                    candidate.name.substringBeforeLast('.', candidate.name).lowercase().startsWith(stem)
+                if (candidate.isDirectory) return@filter false
+                if (candidate.name.substringAfterLast('.', "").lowercase() !in extensions) {
+                    return@filter false
+                }
+                // "同文件夹所有字幕" widens the match to every subtitle beside the
+                // video. The player attaches one track, so the widening shows up as a
+                // looser match rather than as several tracks — that part of the
+                // reference app's wording needs a multi-track model this does not have.
+                if (rule == "all") return@filter true
+                candidate.name.substringBeforeLast('.', candidate.name)
+                    .lowercase()
+                    .startsWith(stem)
             }
             val chosen = candidates.minByOrNull { candidate ->
                 val lower = candidate.name.lowercase()
