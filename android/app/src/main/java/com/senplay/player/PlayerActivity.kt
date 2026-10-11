@@ -69,6 +69,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
@@ -90,6 +91,9 @@ class PlayerActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
 
+        val queue = intent.getStringArrayListExtra(EXTRA_QUEUE_URLS).orEmpty()
+            .zip(intent.getStringArrayListExtra(EXTRA_QUEUE_NAMES).orEmpty())
+
         setContent {
             SenPlayTheme {
                 PlayerScreen(
@@ -99,7 +103,13 @@ class PlayerActivity : ComponentActivity() {
                     userAgent = intent.getStringExtra(EXTRA_USER_AGENT),
                     startPositionMs = intent.getLongExtra(EXTRA_POSITION_MS, 0L),
                     sourceUri = intent.data,
-                    onFinish = { finish() }
+                    queue = queue,
+                    onFinish = { finish() },
+                    onPlayNext = { nextUrl, nextTitle ->
+                        startActivity(intentFor(this, nextUrl, nextTitle,
+                                                userAgent = intent.getStringExtra(EXTRA_USER_AGENT),
+                                                queue = queue))
+                    }
                 )
             }
         }
@@ -111,6 +121,28 @@ class PlayerActivity : ComponentActivity() {
         const val EXTRA_SUBTITLE = "extra_subtitle"
         const val EXTRA_USER_AGENT = "extra_user_agent"
         const val EXTRA_POSITION_MS = "extra_position_ms"
+        const val EXTRA_QUEUE_URLS = "extra_queue_urls"
+        const val EXTRA_QUEUE_NAMES = "extra_queue_names"
+
+        fun intentFor(
+            context: Context,
+            url: String,
+            name: String,
+            subtitle: String? = null,
+            userAgent: String? = null,
+            positionMs: Long = 0L,
+            queue: List<Pair<String, String>> = emptyList()
+        ): Intent = Intent(context, PlayerActivity::class.java).apply {
+            putExtra(EXTRA_URL, url)
+            putExtra(EXTRA_NAME, name)
+            subtitle?.let { putExtra(EXTRA_SUBTITLE, it) }
+            userAgent?.let { putExtra(EXTRA_USER_AGENT, it) }
+            putExtra(EXTRA_POSITION_MS, positionMs)
+            if (queue.isNotEmpty()) {
+                putStringArrayListExtra(EXTRA_QUEUE_URLS, ArrayList(queue.map { it.first }))
+                putStringArrayListExtra(EXTRA_QUEUE_NAMES, ArrayList(queue.map { it.second }))
+            }
+        }
     }
 }
 
@@ -130,6 +162,10 @@ private const val P_LEFT_VERTICAL = "gesture.leftVertical"
 private const val P_RIGHT_VERTICAL = "gesture.rightVertical"
 private const val P_USE_APP_BRIGHTNESS = "gesture.useAppBrightness"
 private const val P_RESUME = "play.resumeFromLast"
+private const val P_AUTO_NEXT = "play.autoNext"
+private const val P_SKIP_INTRO = "play.skipIntroSeconds"
+private const val P_SKIP_OUTRO = "play.skipOutroSeconds"
+private const val P_NEXT_COUNTDOWN = "play.autoNextCountdown"
 
 private enum class DragKind { NONE, SEEK, BRIGHTNESS, VOLUME }
 
@@ -141,7 +177,9 @@ fun PlayerScreen(
     userAgent: String?,
     startPositionMs: Long,
     sourceUri: Uri?,
-    onFinish: () -> Unit
+    queue: List<Pair<String, String>>,
+    onFinish: () -> Unit,
+    onPlayNext: (String, String) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
@@ -159,6 +197,10 @@ fun PlayerScreen(
     var scrubbing by remember { mutableStateOf(false) }
     var scrubTarget by remember { mutableStateOf(0f) }
     var hud by remember { mutableStateOf<String?>(null) }
+    var didSkipIntro by remember { mutableStateOf(false) }
+    var didSkipOutro by remember { mutableStateOf(false) }
+    var upNext by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var countdown by remember { mutableStateOf(0) }
 
     val autoHideSeconds = remember { store.prefInt(P_HIDE_AFTER, 3) }
     val forwardSeconds = remember { store.prefInt(P_FORWARD, 15) }
@@ -174,6 +216,10 @@ fun PlayerScreen(
     val rightVertical = remember { store.prefString(P_RIGHT_VERTICAL, "volume") }
     val useAppBrightness = remember { store.prefBool(P_USE_APP_BRIGHTNESS, false) }
     val resumeFromLast = remember { store.prefBool(P_RESUME, true) }
+    val autoNext = remember { store.prefBool(P_AUTO_NEXT, true) }
+    val skipIntroSeconds = remember { store.prefInt(P_SKIP_INTRO, 0) }
+    val skipOutroSeconds = remember { store.prefInt(P_SKIP_OUTRO, 0) }
+    val nextCountdown = remember { store.prefInt(P_NEXT_COUNTDOWN, 5) }
 
     val player = remember {
         val dataSource = DefaultDataSource.Factory(
@@ -212,6 +258,22 @@ fun PlayerScreen(
             val d = player.duration
             if (d > 0) duration = d
             isPlaying = player.isPlaying
+
+            if (skipIntroSeconds > 0 && !didSkipIntro && position > 1_000L && position < skipIntroSeconds * 1000L) {
+                didSkipIntro = true
+                player.seekTo(skipIntroSeconds * 1000L)
+                hud = "已跳过片头 ${skipIntroSeconds} 秒"
+            }
+            if (skipOutroSeconds > 0 && !didSkipOutro && d > 0 &&
+                d - position <= skipOutroSeconds * 1000L
+            ) {
+                didSkipOutro = true
+                if (autoNext) beginCountdown() else hud = "已到片尾"
+            }
+            if (player.playbackState == Player.STATE_ENDED) {
+                isPlaying = false
+                if (autoNext && upNext == null) beginCountdown()
+            }
         }
     }
 
@@ -238,6 +300,35 @@ fun PlayerScreen(
             }
             SchemeRouter.dispatchCallback(context, sourceUri ?: Uri.EMPTY, url, player.currentPosition / 1000)
             player.release()
+        }
+    }
+
+    fun advanceToNext(next: Pair<String, String>) {
+        upNext = null
+        countdown = 0
+        store.rememberProgress(url, name, player.currentPosition, player.duration.coerceAtLeast(0))
+        player.stop()
+        onPlayNext(next.first, next.second)
+    }
+
+    fun beginCountdown() {
+        val index = queue.indexOfFirst { it.first == url }
+        if (index < 0 || index + 1 >= queue.size) return
+        val next = queue[index + 1]
+        if (nextCountdown <= 0) {
+            advanceToNext(next)
+        } else {
+            upNext = next
+            countdown = nextCountdown
+        }
+    }
+
+    LaunchedEffect(upNext, countdown) {
+        if (upNext == null || countdown <= 0) return@LaunchedEffect
+        delay(1000)
+        countdown -= 1
+        if (countdown == 0) {
+            upNext?.let { advanceToNext(it) }
         }
     }
 

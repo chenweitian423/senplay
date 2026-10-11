@@ -52,6 +52,12 @@ struct HistoryEntry: Codable, Hashable, Identifiable {
     }
 }
 
+/// One entry of the surrounding folder, used to continue playback automatically.
+struct QueueItem: Equatable, Hashable {
+    var url: String
+    var name: String
+}
+
 struct PlayRequest: Equatable {
     var url: String
     var name: String
@@ -59,4 +65,7 @@ struct PlayRequest: Equatable {
     var userAgent: String? = nil
     var positionMs: Double = 0
     var saveToUrlList: Bool = false
+    /// Siblings of the current item, so the player can advance without the host
+    /// view having to rebuild the list.
+    var queue: [QueueItem] = []
 }

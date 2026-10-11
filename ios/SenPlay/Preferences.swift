@@ -249,6 +249,10 @@ private struct PlaybackPrefs: View {
     @AppStorage(PrefKey.forwardSeconds) private var forwardSeconds = 15
     @AppStorage(PrefKey.preloadMode) private var preloadMode = "none"
     @AppStorage(PrefKey.useSystemProxy) private var useSystemProxy = true
+    @AppStorage(PrefKey.autoNext) private var autoNext = true
+    @AppStorage(PrefKey.skipIntroSeconds) private var skipIntroSeconds = 0
+    @AppStorage(PrefKey.skipOutroSeconds) private var skipOutroSeconds = 0
+    @AppStorage(PrefKey.autoNextCountdown) private var autoNextCountdown = 5
 
     private let steps = [5, 10, 15, 30, 60]
 
@@ -287,6 +291,25 @@ private struct PlaybackPrefs: View {
                     Text("保留最后一次").tag("last")
                 }
                 Text("1.缓存设置太大会长时间进行网络下载和磁盘读写，导致设备发热")
+                    .font(.footnote).foregroundColor(.secondary)
+            }
+            Section("连播与跳过") {
+                Toggle("自动连播下一个", isOn: $autoNext)
+                Picker("下一个开始前倒计时", selection: $autoNextCountdown) {
+                    Text("关闭").tag(0)
+                    Text("3 秒").tag(3)
+                    Text("5 秒").tag(5)
+                    Text("10 秒").tag(10)
+                }
+                Picker("跳过片头", selection: $skipIntroSeconds) {
+                    Text("不跳过").tag(0)
+                    ForEach([15, 30, 60, 90, 120], id: \.self) { Text("\($0) 秒").tag($0) }
+                }
+                Picker("跳过片尾", selection: $skipOutroSeconds) {
+                    Text("不跳过").tag(0)
+                    ForEach([15, 30, 60, 90, 120], id: \.self) { Text("\($0) 秒").tag($0) }
+                }
+                Text("片头/片尾跳过对本片生效；连播使用打开文件时所在文件夹的列表。")
                     .font(.footnote).foregroundColor(.secondary)
             }
             Section {

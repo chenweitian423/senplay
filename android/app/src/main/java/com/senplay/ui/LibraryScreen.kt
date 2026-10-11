@@ -78,7 +78,14 @@ fun LibraryScreen(store: LibraryStore, onPlay: (PlayRequest) -> Unit) {
                     },
                     modifier = Modifier.clickable {
                         val position = if (store.rememberProgressEnabled) store.savedPosition(item.url) else 0L
-                        onPlay(PlayRequest(item.url, item.name, userAgent = item.userAgent, positionMs = position))
+                        onPlay(
+                            PlayRequest(
+                                item.url, item.name,
+                                userAgent = item.userAgent,
+                                positionMs = position,
+                                queue = urlList.map { it.url to it.name }
+                            )
+                        )
                     }
                 )
             }
@@ -110,7 +117,15 @@ fun LibraryScreen(store: LibraryStore, onPlay: (PlayRequest) -> Unit) {
                         Text(seconds.toString() + " 秒 · " + mb.toString() + " MB")
                     },
                     leadingContent = { Icon(Icons.Filled.Movie, contentDescription = null) },
-                    modifier = Modifier.clickable { onPlay(PlayRequest(media.uri, media.name)) }
+                    modifier = Modifier.clickable {
+                        onPlay(
+                            PlayRequest(
+                                media.uri, media.name,
+                                positionMs = if (store.rememberProgressEnabled) store.savedPosition(media.uri) else 0L,
+                                queue = localMedia.map { it.uri to it.name }
+                            )
+                        )
+                    }
                 )
             }
         }

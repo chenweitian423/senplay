@@ -203,15 +203,25 @@ private fun ServerBrowserScreen(
                                 path = entry.url
                             }
                         } else {
+                            // Siblings of this folder, so playback can continue on its own.
+                            val queue = entries.filter { !it.isDirectory }.map { candidate ->
+                                val candidateUrl = if (server.isEmbyLike) {
+                                    emby?.streamUrl(candidate) ?: candidate.url
+                                } else {
+                                    candidate.url
+                                }
+                                candidateUrl to candidate.name
+                            }
                             val request = if (server.isEmbyLike) {
                                 val client = emby
                                 PlayRequest(
                                     url = client?.streamUrl(entry) ?: entry.url,
                                     name = entry.name,
-                                    headers = client?.mediaHeaders() ?: emptyMap()
+                                    headers = client?.mediaHeaders() ?: emptyMap(),
+                                    queue = queue
                                 )
                             } else {
-                                PlayRequest(entry.url, entry.name)
+                                PlayRequest(entry.url, entry.name, queue = queue)
                             }
                             onPlay(request)
                         }

@@ -61,8 +61,14 @@ struct LibraryView: View {
                     }
                     ForEach(localFiles, id: \.self) { file in
                         Button {
-                            pending = PlayRequest(url: file.absoluteString, name: file.lastPathComponent,
-                                                  positionMs: store.savedPosition(url: file.absoluteString))
+                            pending = PlayRequest(
+                                url: file.absoluteString,
+                                name: file.lastPathComponent,
+                                positionMs: store.savedPosition(url: file.absoluteString),
+                                queue: localFiles.map {
+                                    QueueItem(url: $0.absoluteString, name: $0.lastPathComponent)
+                                }
+                            )
                         } label: {
                             Text(file.lastPathComponent)
                         }
@@ -227,6 +233,16 @@ struct ServerBrowserView: View {
     @State private var loading = false
     @State private var errorText: String?
 
+    /// Playable siblings of the current folder, so the player can advance on its own.
+    private var siblings: [(String, String)] {
+        let files = entries.filter { !$0.isDirectory }
+        guard server.isEmbyLike else {
+            return files.map { ($0.url, $0.name) }
+        }
+        let client = emby ?? EmbyClient(server: server)
+        return files.map { (client.streamURL(for: $0), $0.name) }
+    }
+
     var body: some View {
         List {
             if let errorText {
@@ -307,7 +323,11 @@ struct ServerBrowserView: View {
         }
         if server.isEmbyLike {
             let client = emby ?? EmbyClient(server: server)
-            pending = PlayRequest(url: client.streamURL(for: entry), name: entry.name)
+            pending = PlayRequest(
+                url: client.streamURL(for: entry),
+                name: entry.name,
+                queue: siblings.map { QueueItem(url: $0.0, name: $0.1) }
+            )
         } else {
             pending = PlayRequest(url: entry.url, name: entry.name)
         }

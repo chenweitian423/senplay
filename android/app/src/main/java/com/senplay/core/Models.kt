@@ -46,5 +46,7 @@ data class PlayRequest(
     val userAgent: String? = null,
     val positionMs: Long = 0L,
     val headers: Map<String, String> = emptyMap(),
-    val saveToUrlList: Boolean = false
+    val saveToUrlList: Boolean = false,
+    /** Playable siblings of the current folder, used for continuous playback. */
+    val queue: List<Pair<String, String>> = emptyList()
 )

@@ -12,7 +12,9 @@ struct SenPlayApp: App {
             HomeView(store: store, pending: $pending)
                 .onOpenURL { url in handle(url) }
                 .fullScreenCover(item: $pending) { request in
-                    PlayerScreen(request: request) { seconds in
+                    PlayerScreen(request: request, onPlayNext: { next in
+                        pending = next
+                    }) { seconds in
                         pending = nil
                         if let source = callbackSource,
                            let reply = SchemeRouter.callbackURL(for: source, lastPlayedURL: request.url, positionSeconds: seconds) {

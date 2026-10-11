@@ -26,6 +26,11 @@ enum PrefKey {
     static let showStartTitle = "pref.ui.showStartTitle"
     static let showSkipTip = "pref.ui.showSkipTip"
     static let showCloudThrottleTip = "pref.ui.showCloudThrottleTip"
+    // 连播与跳过
+    static let autoNext = "pref.play.autoNext"
+    static let skipIntroSeconds = "pref.play.skipIntroSeconds"
+    static let skipOutroSeconds = "pref.play.skipOutroSeconds"
+    static let autoNextCountdown = "pref.play.autoNextCountdown"
     // 手势
     static let clickAction = "pref.gesture.click"
     static let doubleLeftAction = "pref.gesture.doubleLeft"
@@ -339,6 +344,8 @@ private struct TrackRow: Identifiable {
 
 struct PlayerScreen: View {
     let request: PlayRequest
+    /// Fires when the queue advances; the host swaps the presented request.
+    var onPlayNext: ((PlayRequest) -> Void)? = nil
     var onClose: (Double) -> Void = { _ in }
 
     @AppStorage(PrefKey.resumeFromLast) private var resumeFromLast = true
@@ -364,6 +371,10 @@ struct PlayerScreen: View {
     @AppStorage(PrefKey.preferHardwareDecode) private var preferHardwareDecode = true
     @AppStorage(PrefKey.rememberAudioTrack) private var rememberAudioTrack = true
     @AppStorage(PrefKey.rememberSubtitleTrack) private var rememberSubtitleTrack = true
+    @AppStorage(PrefKey.autoNext) private var autoNext = true
+    @AppStorage(PrefKey.skipIntroSeconds) private var skipIntroSeconds = 0
+    @AppStorage(PrefKey.skipOutroSeconds) private var skipOutroSeconds = 0
+    @AppStorage(PrefKey.autoNextCountdown) private var autoNextCountdown = 5
 
     @StateObject private var subtitles = SubtitleController()
     @State private var kernel: KernelPlayer?
@@ -388,6 +399,10 @@ struct PlayerScreen: View {
     @State private var toast: String?
     @State private var hideTask: DispatchWorkItem?
     @State private var activePanel: PanelKind?
+    @State private var didSkipIntro = false
+    @State private var didSkipOutro = false
+    @State private var upNext: QueueItem?
+    @State private var countdown: Int = 0
 
     private let speeds: [Float] = [0.5, 0.75, 1, 1.25, 1.5, 2, 3]
 
@@ -457,6 +472,10 @@ struct PlayerScreen: View {
 
                 if let panel = activePanel {
                     panelOverlay(panel)
+                }
+
+                if let next = upNext {
+                    upNextCard(next)
                 }
             }
         }
@@ -725,6 +744,36 @@ struct PlayerScreen: View {
         .frame(height: 20)
     }
 
+    private func upNextCard(_ next: QueueItem) -> some View {
+        VStack {
+            Spacer()
+            HStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("即将播放").font(.caption2).foregroundColor(.white.opacity(0.65))
+                    Text(next.name).font(.subheadline.weight(.medium))
+                        .foregroundColor(.white).lineLimit(1)
+                }
+                Spacer()
+                Text(countdown > 0 ? "\(countdown)" : "▶")
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                Button("立即播放") { advance() }
+                    .font(.footnote.weight(.semibold))
+                Button("取消") {
+                    upNext = nil
+                    countdown = 0
+                }
+                .font(.footnote)
+                .foregroundColor(.white.opacity(0.7))
+            }
+            .padding(14)
+            .background(Color.black.opacity(0.78))
+            .cornerRadius(12)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 120)
+        }
+    }
+
     private func panelOverlay(_ panel: PanelKind) -> some View {
         ZStack {
             Color.black.opacity(0.001)
@@ -916,6 +965,58 @@ struct PlayerScreen: View {
 
     // MARK: actions
 
+    /// Intro/outro handling. The outro branch only marks the position; advancing is
+    /// the countdown's job, so a viewer can cancel it.
+    private func applySkipRules(current: Double, total: Double) {
+        if skipIntroSeconds > 0, !didSkipIntro, current > 1.0, current < Double(skipIntroSeconds) {
+            didSkipIntro = true
+            kernel?.seek(to: Double(skipIntroSeconds))
+            toast = "已跳过片头 \(skipIntroSeconds) 秒"
+            scheduleToastClear()
+        }
+        if skipOutroSeconds > 0, !didSkipOutro, total > 0,
+           total - current <= Double(skipOutroSeconds) {
+            didSkipOutro = true
+            if autoNext {
+                beginCountdown()
+            } else {
+                toast = "已到片尾"
+                scheduleToastClear()
+            }
+        }
+    }
+
+    private func beginCountdown() {
+        let queue = request.queue
+        guard autoNext,
+              let index = queue.firstIndex(where: { $0.url == request.url }),
+              index + 1 < queue.count else { return }
+        upNext = queue[index + 1]
+        countdown = autoNextCountdown
+        guard countdown > 0 else { advance() ; return }
+        Task { @MainActor in
+            while countdown > 0, upNext != nil {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                countdown -= 1
+            }
+            if upNext != nil { advance() }
+        }
+    }
+
+    private func advance() {
+        guard let next = upNext else { return }
+        upNext = nil
+        countdown = 0
+        let seeded = PlayRequest(
+            url: next.url,
+            name: next.name,
+            userAgent: request.userAgent,
+            positionMs: LibraryStore.shared.savedPosition(url: next.url),
+            queue: request.queue
+        )
+        onPlayNext?(seeded)
+    }
+
     private func togglePlayPause() {
         kernel?.togglePlay()
         isPlaying.toggle()
@@ -1002,12 +1103,14 @@ struct PlayerScreen: View {
         options.isSeekedAutoPlay = true
 
         let player = KernelPlayer(url: url, options: options)
-        player.onTime = { current, _ in
+        player.onTime = { [self] current, total in
             if !scrubbing { currentTime = current }
             subtitles.tick(at: current)
+            applySkipRules(current: current, total: total)
         }
         player.onFinish = {
             isPlaying = false
+            if autoNext { beginCountdown() }
         }
         kernel = player
         isPlaying = true

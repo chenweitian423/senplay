@@ -92,12 +92,15 @@ class MainActivity : ComponentActivity() {
 
     private fun launchPlayer(request: PlayRequest) {
         startActivity(
-            Intent(this, PlayerActivity::class.java)
-                .putExtra(PlayerActivity.EXTRA_URL, request.url)
-                .putExtra(PlayerActivity.EXTRA_NAME, request.name)
-                .putExtra(PlayerActivity.EXTRA_SUBTITLE, request.subtitleUrl)
-                .putExtra(PlayerActivity.EXTRA_USER_AGENT, request.userAgent)
-                .putExtra(PlayerActivity.EXTRA_POSITION_MS, request.positionMs)
+            PlayerActivity.intentFor(
+                context = this,
+                url = request.url,
+                name = request.name,
+                subtitle = request.subtitleUrl,
+                userAgent = request.userAgent,
+                positionMs = request.positionMs,
+                queue = request.queue
+            )
         )
     }
 }
