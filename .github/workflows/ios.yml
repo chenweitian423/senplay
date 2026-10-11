@@ -35,22 +35,36 @@ jobs:
       - name: Build unsigned app
         working-directory: ios
         run: |
-          set -o pipefail
+          # No pipefail: it would abort before the diagnostics branch runs.
+          set +o pipefail
           xcodebuild -project SenPlay.xcodeproj -scheme SenPlay -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" \
-            build 2>&1 | tee xcodebuild.log | tail -n 40
-          status=${PIPESTATUS[0]}
-          if [ "$status" -ne 0 ]; then
-            echo "--- compiler diagnostics ---"
-            grep -E "error:" xcodebuild.log | head -n 25
-            # Also emit as annotations so the failure is readable without the raw log.
-            grep -E "error:" xcodebuild.log | head -n 12 | while IFS= read -r line; do
+            build > xcodebuild.log 2>&1
+          status=$?
+          if [ "$status" -eq 0 ]; then
+            tail -n 20 xcodebuild.log
+            exit 0
+          fi
+
+          echo "=== tail ==="
+          tail -n 60 xcodebuild.log || true
+          grep -E "error:" xcodebuild.log > errors.txt || true
+          echo "=== errors ($(wc -l < errors.txt)) ==="
+          head -n 25 errors.txt || true
+
+          if [ -s errors.txt ]; then
+            head -n 6 errors.txt | while IFS= read -r line; do
               echo "::error title=build::$line"
             done
-            exit "$status"
+          else
+            tail -n 2 xcodebuild.log | tr '\n' ' ' | cut -c1-500 | while IFS= read -r line; do
+              echo "::error title=build-tail::$line"
+            done
+            echo "::error title=build-meta::exit $status, $(wc -l < xcodebuild.log) log lines, $(wc -c < xcodebuild.log) bytes"
           fi
+          exit "$status"
 
       - name: Package IPA
         working-directory: ios
