@@ -74,14 +74,11 @@ jobs:
           set +e
           # Pick whatever iPhone simulator the image ships rather than pinning a
           # name that changes with each Xcode release.
-          DEVICE=$(xcrun simctl list devices available -j | python3 -c "
-import json,sys
-data = json.load(sys.stdin)['devices']
-for runtime in sorted(data, reverse=True):
-    for device in data[runtime]:
-        if device['name'].startswith('iPhone') and device.get('isAvailable'):
-            print(device['name']); raise SystemExit
-")
+          # Plain shell: an embedded heredoc inside a YAML block scalar breaks the
+          # workflow file's indentation.
+          DEVICE=$(xcrun simctl list devices available \
+            | sed -n 's/^ *\(iPhone[^(]*\)(.*/\1/p' \
+            | head -n1 | sed 's/ *$//')
           [ -n "$DEVICE" ] || { echo "::error::没有可用的 iPhone 模拟器"; exit 1; }
           echo "simulator: $DEVICE"
 

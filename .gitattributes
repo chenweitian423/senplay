@@ -1,7 +1,6 @@
-* text=auto eol=lf
-*.bat text eol=crlf
-*.jar binary
-*.png binary
-*.p12 binary
-*.ttf binary
-*.otf binary
+# One fixture deliberately carries CRLF endings and a BOM; normalising it would
+# remove exactly the case the parser test is there to cover.
+tests/fixtures/iptv-crlf.m3u -text
+
+# Everything else: normalise on commit, keep platform endings on checkout.
+* text=auto
