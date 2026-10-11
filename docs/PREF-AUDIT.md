@@ -135,14 +135,19 @@ keys with a real read on Android: 54
 
 | 能力 | iOS | Android | 说明 |
 |---|---|---|---|
-| 投屏（DLNA） | **无** | 有 | iOS 需要 `com.apple.developer.networking.multicast` entitlement 才能做 SSDP 发现，当前工程没有申请。这是平台约束，不是没接线。 |
+| 投屏 | 有（AirPlay） | 有（DLNA） | **两端都有，走的是各自平台的机制**。iOS 用 `allowsExternalPlayback`，Android 用 SSDP 发现 DLNA 设备。iOS 额外做 DLNA 需要 `com.apple.developer.networking.multicast` entitlement，当前没申请——但那是"要不要加第二个投屏方式"，不是"iOS 不能投屏"。 |
 | SMB | **无** | 有 | AMSMB2 没有可用的公开 API；其余候选都要求更高系统版本。 |
 | SFTP | **无** | 有 | Citadel 要求 iOS 17，而参考实现的 `MinimumOSVersion` 是 10.0。 |
 | 画中画 | 有（`layer.isPipActive`） | 有（`enterPip`） | 两端都成立，iOS 由 KSPlayer 持有生命周期。 |
 | 后台音频 | 有（`setAudioSession`） | 有（`MediaSessionService`） | 两端都成立。 |
 | 片头片尾跳过、连播、倍速记忆 | 有 | 有 | — |
 
-**这三项 iOS 缺失不是"忘了做"**，每一条都有具体的外部原因。它们应当留在表里，
+**更正（round 38）**：这张表在 round 36 把投屏记成了"iOS 无"。那是错的——当时我
+`grep cast` 只匹配到"演职人员"，就把搜不到当成了没有。iOS 的投屏走
+`allowsExternalPlayback`，用的词不一样，功能是存在的。**grep 不到不等于不存在**，
+这条错误在文档里留了两轮，因为它看起来像一条结论而不是一次搜索的结果。
+
+**iOS 缺 SMB 和 SFTP 不是"忘了做"**，每一条都有具体的外部原因。它们应当留在表里，
 而不是被"双端已对齐"这类总结盖过去——下一轮或下一个人需要知道的是**为什么缺**，
 以及**重新评估的前提是什么**（申请到 entitlement、或内核换库、或最低版本上调）。
 

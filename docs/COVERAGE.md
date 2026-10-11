@@ -14,11 +14,11 @@
 | 连播 | 完成 | 队列随 `PlayRequest` 传递，双端键串一致 |
 | 片头片尾跳过 | 完成 | 阈值由偏好给出，片尾只倒计时不强制跳，可取消 |
 | 断点续播 | 完成 | 双端各自持久化，Emby/Plex 的服务器端进度也读入 |
-| 倍速记忆 | 完成 | `pref.play.forwardSeconds` / `backwardSeconds` 驱动的按钮与手势 |
+| 倍速记忆 | 完成 | `pref.play.rememberSpeed` / `pref.play.lastSpeed`；恢复上次选择的倍速 |
 | 后台音频 | 完成 | iOS `UIBackgroundModes: audio`；Android 是 `MediaSessionService`，播放器归服务所有，界面通过 MediaController 驱动 |
 | 锁屏 / 控制中心 | 完成 | iOS `MPRemoteCommandCenter`：播放、暂停、切换、拖动、前后跳 |
 | 画中画 | 完成 | iOS 用 KSPlayerLayer 的 PiP 生命周期；Android `PictureInPictureParams` |
-| 投屏 | 完成 | iOS 走 AirPlay / 外部播放；Android 另有 DLNA（见下） |
+| 投屏 | 完成 | iOS 走 AirPlay（`allowsExternalPlayback`）；Android 走 DLNA 设备发现 |
 | 章节跳转 | 完成 | iOS 读内核 `chapters`；**Android 未做**，Media3 不暴露章节轨 |
 
 ## 协议层
@@ -49,14 +49,22 @@
 | 最近添加 | 完成 | Emby 按 `DateCreated` 倒序、Plex `/library/recentlyAdded` |
 | 播放记录 | 完成 | 独立模块，逐条进度与删除 |
 | 合集 | 完成 | Emby 的 BoxSet 与 Plex 的 collection，都作为第四个板块列出并可进入 |
+| 详情页 | 完成 | 按 id 取单条记录，展示简介、演职人员、分辨率 / 帧率 / HDR |
+| 顶部轮播 | 完成 | 复用「最近添加」的数据源，横铺在浏览器顶部 |
+| 类似作品 | 完成 | 用 Emby 的 `/Items/{id}/Similar`，排序交给服务端 |
+| 封面播放按钮 | 完成 | `pref.library.displayPlayButton` |
+| 最新中隐藏已播放 | 完成 | `pref.library.hidePlayedInLatest`，在板块内过滤 |
 
 ## 字幕与弹幕
 
 | 能力 | 状态 | 备注 |
 |---|---|---|
 | 内嵌字幕与 ASS 渲染 | 完成 | 由内核负责 |
-| 外挂字幕自动匹配 | 完成 | 同目录同名字幕，简中 → 繁中 → 其他 → 英文 排序 |
-| 字幕样式偏好 | 完成 | 字号缩放、防遮挡、忽略 ASS/SRT 样式（透传内核） |
+| 外挂字幕自动匹配 | 完成 | 简中 → 繁中 → 其他 → 英文 排序 |
+| 外挂字幕加载规则 | 完成 | `pref.subtitle.loadingRule`：同名字幕 / 全部字幕 / 仅手动。**「全部字幕」当前是放宽匹配而非多轨**，播放器只挂一条轨 |
+| 弹幕关键词屏蔽 | 完成 | 大小写不敏感的子串匹配，分隔符按用户可能输入的都切开 |
+| 底部弹幕转浮动 | 完成 | `pref.danmaku.bottomToFloat` |
+| 字幕样式偏好 | **部分** | 字号缩放与防遮挡已接；`bold` / `italic` / `outlineWidth` / `shadowWidth` / `ratioFix` / `hdrSubtitle` / `ignoreAss` / `ignoreSrt` **未接**——iOS 走 libass 从字幕文件渲染样式，Android 走 Media3 的 `SubtitleView` 默认样式，两端都没有「覆盖文件样式」的接口。见 PREF-AUDIT 的「内核无落点」一节 |
 | 弹幕协议 | 完成 | dandanplay 兼容的两个端点，端点由用户自填 |
 | 弹幕渲染 | 完成 | 车道分配 + 着色 + 顶部/底部/反向，成本与在屏数量成正比 |
 

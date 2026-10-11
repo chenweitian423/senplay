@@ -4,6 +4,7 @@ android/app/build
 android/.gradle
 android/local.properties
 ios/build
+ios/build-release
 ios/Payload
 ios/artifacts
 ios/*.xcodeproj
