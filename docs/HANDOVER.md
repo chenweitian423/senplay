@@ -36,6 +36,53 @@
 - **协议**：SMB / FTP / SFTP / UPnP-DLNA / Plex / 网盘（115、阿里、百度、123）/ 弹幕 API 未做
 - **交互**：手势体系、画中画、多音轨与字幕轨选择面板、剧集自动连播、海报墙、投屏
 
+## 样本放在哪
+
+Mac 上光装着那个 App 是不够的 —— App Store 装的 App 是加密且锁在沙盒里的，拿不到主二进制。二进制分析必须用 IPA 文件本身：
+
+```
+SenPlayer_6.2.1_解锁会员(6).ipa   84,257,622 B
+sha256  29355c399e4d6fa3f49bea87d5bd8acb6d3a3e326c7e0037471767277fad00b5
+```
+
+Windows 侧有两个位置，拷任意一个：
+
+- 原始只读副本：`F:\dsh\attachments\v1\files\29\29355c399e4d6fa3f49bea87d5bd8acb6d3a3e326c7e0037471767277fad00b5\SenPlayer_6.2.1_解锁会员(6).ipa`
+- 工作副本（已核验 sha256 一致）：`F:\codex项目\DeepSeek\work\senplayer\input.ipa`
+
+Mac 上放好后：
+
+```bash
+mkdir -p ~/re/senplayer && cd ~/re/senplayer
+shasum -a 256 *.ipa          # 必须等于上面那串
+mkdir -p extract && tar -xf *.ipa -C extract
+# 主二进制： extract/Payload/SenPlayer.app/SenPlayer   (61,914,192 B)
+```
+
+解包目录（121 MB）不用从 Windows 带，Mac 上解一次就够。
+
+## REA 不是运行环境，别把它当启动器
+
+项目本身就是个普通的 Xcode + Gradle 仓库。Mac 上的 AI 照常读写代码、跑 git、改 UI，**不需要用 REA 去"启动"任何东西**。
+
+REA 是加装给 AI 的逆向工具箱（MCP 服务，170 个工具），外加给你在终端用的同款 CLI。它只覆盖两件事：
+
+- 二进制取证：`inspect-macho`、`inspect-signature`、`inspect-plist`、`project-apple-application-graph`
+- 反汇编：配 Hopper 或 Ghidra 后的 `open_binary` / `decompile` / `xrefs`
+
+装与不装的区别很直接：
+
+- **不装**：项目照常开发，但"主二进制是否被 patch"这个问题收不了口（Windows 上我就是靠自写 Mach-O 解析器绕过去的，只能做到结构层面）。
+- **装了**：AI 会在需要时**自己调用** REA 的工具（工具名形如 `mcp__rea__*`），你不用手动指挥；再装上 skill，它就知道什么时候该用哪一个。
+
+```bash
+npx rea-agents@latest setup           # 注册 MCP + 装 skill（Claude Code / Codex / Cursor / Gemini CLI / DSH 等）
+rea doctor --json                     # 就绪度总览
+rea doctor --provider hopper --json   # Hopper 是否可用
+```
+
+装完**要重启那个 AI 客户端**，`mcp__rea__*` 工具才会挂上去。如果那个 AI 不支持 MCP，就在终端直接敲 `rea` 命令，能力完全一样。
+
 ## 在 Mac 上要做的三件事
 
 **① 收口"是否 patch"**（REA 的 Apple 工具链在 Mac 上才存在；Windows 上 `inspect-macho` / `inspect-signature` 全部返回 `unsupported_provider`）
