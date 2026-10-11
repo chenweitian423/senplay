@@ -1,0 +1,20 @@
+# --- build output ---
+android/build
+android/app/build
+android/.gradle
+android/local.properties
+ios/build
+ios/Payload
+ios/artifacts
+ios/*.xcodeproj
+ios/*.xcworkspace
+*.ipa
+*.apk
+*.aab
+
+# --- signing material (never commit) ---
+.keys
+*.jks
+*.keystore
+*.p12
+local.properties
