@@ -325,6 +325,68 @@ extension KernelPlayer: KSPlayerLayerDelegate {
 
 /// Hosts the kernel's render surface. Ownership of the control surface stays with
 /// the SwiftUI layers above, so this bridge does nothing but forward the view.
+/// Routes hardware keyboard events to the player. The reference app binds
+/// space / arrows / +/- / 0 / F / I; the same set is honoured here so an iPad with a
+/// keyboard behaves like the desktop build.
+final class KeyCommandRouter {
+    var handler: ((String) -> Void)?
+
+    func dispatch(_ key: String) {
+        handler?(key)
+    }
+}
+
+final class KeyCommandHost: UIViewController {
+    var router: KeyCommandRouter?
+
+    override var canBecomeFirstResponder: Bool { true }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        becomeFirstResponder()
+    }
+
+    override var keyCommands: [UIKeyCommand]? {
+        func command(_ input: String, _ flags: UIKeyModifierFlags = [], _ name: String) -> UIKeyCommand {
+            let command = UIKeyCommand(input: input, modifierFlags: flags, action: #selector(handle(_:)))
+            command.wantsPriorityOverSystemBehavior = true
+            command.accessibilityLabel = name
+            return command
+        }
+        return [
+            command(" ", [], "toggle"),
+            command(UIKeyCommand.inputLeftArrow, [], "back"),
+            command(UIKeyCommand.inputRightArrow, [], "forward"),
+            command(UIKeyCommand.inputUpArrow, [], "volumeUp"),
+            command(UIKeyCommand.inputDownArrow, [], "volumeDown"),
+            command("=", [], "rateUp"),
+            command("+", [.shift], "rateUp"),
+            command("-", [], "rateDown"),
+            command("0", [], "reset"),
+            command("f", [], "fullscreen"),
+            command("i", [], "info"),
+        ]
+    }
+
+    @objc private func handle(_ sender: UIKeyCommand) {
+        router?.dispatch(sender.accessibilityLabel ?? "")
+    }
+}
+
+struct KeyCommandSurface: UIViewControllerRepresentable {
+    let router: KeyCommandRouter
+
+    func makeUIViewController(context: Context) -> KeyCommandHost {
+        let host = KeyCommandHost()
+        host.router = router
+        return host
+    }
+
+    func updateUIViewController(_ uiViewController: KeyCommandHost, context: Context) {
+        uiViewController.router = router
+    }
+}
+
 struct KernelSurface: UIViewRepresentable {
     let player: KernelPlayer
 
@@ -435,6 +497,7 @@ struct PlayerScreen: View {
     @State private var didSkipOutro = false
     @State private var upNext: QueueItem?
     @State private var danmakuItems: [DanmakuItem] = []
+    @State private var keyRouter = KeyCommandRouter()
     @State private var countdown: Int = 0
 
     private let speeds: [Float] = [0.5, 0.75, 1, 1.25, 1.5, 2, 3]
@@ -462,6 +525,9 @@ struct PlayerScreen: View {
                         .ignoresSafeArea()
                         .scaleEffect(zoom)
                 }
+
+                KeyCommandSurface(router: keyRouter)
+                    .frame(width: 0, height: 0)
 
                 if danmakuEnabled, !danmakuItems.isEmpty {
                     DanmakuOverlay(items: danmakuItems,
@@ -1270,6 +1336,32 @@ struct PlayerScreen: View {
         }
 
         loadDanmaku()
+
+        keyRouter.handler = { key in
+            switch key {
+            case "toggle": kernel?.togglePlay()
+            case "back": kernel?.seek(to: max(currentTime - 15, 0))
+            case "forward": kernel?.seek(to: min(currentTime + 15, duration))
+            case "volumeUp":
+                volume = min(volume + 0.1, 1)
+                kernel?.setVolume(Float(volume))
+            case "volumeDown":
+                volume = max(volume - 0.1, 0)
+                kernel?.setVolume(Float(volume))
+            case "rateUp":
+                speed = min(speed + 0.25, 3)
+                kernel?.setRate(speed)
+            case "rateDown":
+                speed = max(speed - 0.25, 0.25)
+                kernel?.setRate(speed)
+            case "reset":
+                speed = 1
+                kernel?.setRate(1)
+            case "fullscreen": controlsVisible.toggle()
+            case "info": activePanel = activePanel == .more ? nil : .more
+            default: break
+            }
+        }
 
         NowPlaying.shared.activate(
             title: request.name,
