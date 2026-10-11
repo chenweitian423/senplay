@@ -50,6 +50,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.senplay.core.LibraryStore
@@ -470,6 +473,11 @@ private fun ServerBrowserScreen(
             @Suppress("UNUSED_EXPRESSION") navigable
         }
 
+        val displayContext = LocalContext.current
+        val display = remember(displayContext) {
+            ListDisplay(LibraryStore.get(displayContext))
+        }
+
         if (grid) {
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = 118.dp),
@@ -477,16 +485,12 @@ private fun ServerBrowserScreen(
                 contentPadding = PaddingValues(10.dp)
             ) {
                 gridItems(visible, key = { it.url + it.name }) { entry ->
-                    PosterCell(entry) { open(entry) }
+                    PosterCell(entry, display) { open(entry) }
                 }
             }
         } else {
             // This composable has no store of its own; the settings it reads are
             // global, so it reaches for them directly.
-            val displayContext = LocalContext.current
-            val display = remember(displayContext) {
-                ListDisplay(LibraryStore.get(displayContext))
-            }
             LazyColumn(modifier = Modifier.fillMaxWidth()) {
                 items(visible, key = { it.url + it.name }) { entry ->
                     ListItem(
@@ -588,6 +592,14 @@ private class ListDisplay(store: LibraryStore) {
     val showProgress = store.prefBool("list.showProgress", true)
     val showCount = store.prefBool("list.showCount", true)
     val ellipsis = store.prefBool("list.ellipsis", false)
+
+    // Poster marks: what the reference app puts on the artwork rather than in the
+    // list row.
+    val showPlayedMark = store.prefBool("library.showPlayedMark", true)
+    val showRating = store.prefBool("library.showRating", true)
+    val showRemaining = store.prefBool("library.showRemaining", true)
+    val showMediaInfo = store.prefBool("library.showMediaInfo", true)
+    val titleCentered = store.prefString("library.titleAlignment", "leading") == "center"
 }
 
 /**
@@ -650,8 +662,27 @@ private fun PlexLibrary.toItem() = PlexItem(
     isPlayed = false
 )
 
+/**
+ * Rating, remaining time and size, in the order the reference app shows them. Only
+ * what the entry carries: a folder has none of them, and a server that reports no
+ * rating produces no line rather than a zero.
+ */
+private fun posterMark(entry: MediaEntry, display: ListDisplay): String? {
+    val parts = mutableListOf<String>()
+    if (display.showRating) {
+        entry.rating?.takeIf { it > 0 }?.let { parts += "★ %.1f".format(it) }
+    }
+    if (display.showRemaining && entry.durationMs > entry.positionMs && entry.positionMs > 0) {
+        parts += "剩余 " + clock(entry.durationMs - entry.positionMs)
+    }
+    if (display.showMediaInfo && !entry.isDirectory && entry.size > 0) {
+        parts += android.text.format.Formatter.formatFileSize(null, entry.size)
+    }
+    return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
+}
+
 @Composable
-private fun PosterCell(entry: MediaEntry, onClick: () -> Unit) {
+private fun PosterCell(entry: MediaEntry, display: ListDisplay, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .clickable { onClick() }
@@ -679,7 +710,7 @@ private fun PosterCell(entry: MediaEntry, onClick: () -> Unit) {
                     contentDescription = null
                 )
             }
-            if (entry.progress > 0f) {
+            if (display.showProgress && entry.progress > 0f) {
                 LinearProgressIndicator(
                     progress = { entry.progress },
                     modifier = Modifier
@@ -688,13 +719,37 @@ private fun PosterCell(entry: MediaEntry, onClick: () -> Unit) {
                         .height(3.dp)
                 )
             }
+            if (display.showPlayedMark && entry.played) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(5.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(Color.Black.copy(alpha = 0.6f))
+                        .padding(horizontal = 5.dp, vertical = 2.dp)
+                ) {
+                    Text("已看完", color = Color.White, fontSize = 9.sp)
+                }
+            }
         }
         Text(
             entry.name,
             style = MaterialTheme.typography.bodySmall,
             maxLines = 2,
-            modifier = Modifier.padding(top = 4.dp)
+            textAlign = if (display.titleCentered) TextAlign.Center else TextAlign.Start,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp)
         )
+        posterMark(entry, display)?.let { mark ->
+            Text(
+                mark,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
         if (entry.subtitle.isNotBlank()) {
             Text(
                 entry.subtitle,

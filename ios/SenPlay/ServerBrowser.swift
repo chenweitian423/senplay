@@ -18,6 +18,13 @@ private struct ListDisplay {
     var rounded = true
     var ellipsis = false
     var fullNameOnMenu = true
+    // Poster marks. These are the ones the reference app puts on the artwork rather
+    // than in the list row.
+    var showPlayedMark = true
+    var showRating = true
+    var showRemaining = true
+    var showMediaInfo = true
+    var titleCentered = false
 
     init(_ defaults: UserDefaults = .standard) {
         showSize = defaults.object(forKey: "pref.list.showSize") as? Bool ?? true
@@ -28,6 +35,12 @@ private struct ListDisplay {
         rounded = defaults.object(forKey: "pref.list.rounded") as? Bool ?? true
         ellipsis = defaults.object(forKey: "pref.list.ellipsis") as? Bool ?? false
         fullNameOnMenu = defaults.object(forKey: "pref.list.fullNameOnMenu") as? Bool ?? true
+        showPlayedMark = defaults.object(forKey: "pref.library.showPlayedMark") as? Bool ?? true
+        showRating = defaults.object(forKey: "pref.library.showRating") as? Bool ?? true
+        showRemaining = defaults.object(forKey: "pref.library.showRemaining") as? Bool ?? true
+        showMediaInfo = defaults.object(forKey: "pref.library.showMediaInfo") as? Bool ?? true
+        titleCentered = (defaults.string(forKey: "pref.library.titleAlignment") ?? "leading")
+            == "center"
     }
 }
 
@@ -223,14 +236,35 @@ struct ServerBrowserView: View {
             VStack(alignment: .leading, spacing: 6) {
                 ZStack(alignment: .bottomLeading) {
                     posterImage(entry)
-                    if entry.progress > 0 {
+                    if display.showProgress, entry.progress > 0 {
                         progressBar(entry.progress)
+                    }
+                    if display.showPlayedMark, entry.isPlayed {
+                        Text("已看完")
+                            .font(.system(size: 9, weight: .semibold))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color.black.opacity(0.6))
+                            .foregroundColor(.white)
+                            .cornerRadius(4)
+                            .padding(5)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity,
+                                   alignment: .topTrailing)
                     }
                 }
                 Text(entry.name)
                     .font(.caption)
                     .lineLimit(2)
                     .foregroundColor(.primary)
+                    .multilineTextAlignment(display.titleCentered ? .center : .leading)
+                    .frame(maxWidth: .infinity,
+                           alignment: display.titleCentered ? .center : .leading)
+                if let mark = posterMark(entry) {
+                    Text(mark)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
                 if !entry.subtitle.isEmpty {
                     Text(entry.subtitle)
                         .font(.caption2)
@@ -240,6 +274,26 @@ struct ServerBrowserView: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    /// Rating and remaining time, in the order the reference app shows them. Only
+    /// what the entry carries: a folder has neither, and a server that reports no
+    /// rating produces no line rather than a zero.
+    private func posterMark(_ entry: MediaEntry) -> String? {
+        var parts: [String] = []
+        if display.showRating, let rating = entry.rating, rating > 0 {
+            parts.append(String(format: "★ %.1f", rating))
+        }
+        if display.showRemaining, entry.durationMs > 0, entry.positionMs > 0,
+           entry.durationMs > entry.positionMs {
+            let left = (entry.durationMs - entry.positionMs) / 1000
+            parts.append("剩余 " + Self.clock(left))
+        }
+        if display.showMediaInfo, !entry.isDirectory, entry.size > 0 {
+            parts.append(ByteCountFormatter.string(fromByteCount: Int64(entry.size),
+                                                   countStyle: .file))
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     private func progressBar(_ fraction: Double) -> some View {
