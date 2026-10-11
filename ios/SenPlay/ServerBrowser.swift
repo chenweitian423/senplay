@@ -38,6 +38,9 @@ struct ServerBrowserView: View {
     @State private var sortBy: EmbyClient.SortBy = .name
     @State private var ascending = true
     @State private var search = ""
+    @State private var ftp: FTPClient?
+    @State private var bridge: FTPMediaBridge?
+    @State private var ftpSize: UInt64 = 0
 
     private var isEmbyLike: Bool { server.isEmbyLike }
 
@@ -246,7 +249,13 @@ struct ServerBrowserView: View {
 
     private func open(_ entry: MediaEntry) {
         guard isEmbyLike, strip == .files else {
-            play(entry)
+            if !isEmbyLike, entry.isDirectory {
+                stack.append((path, parentId))
+                path = entry.url
+                Task { await reload() }
+            } else {
+                play(entry)
+            }
             return
         }
         if entry.isDirectory {
@@ -258,7 +267,31 @@ struct ServerBrowserView: View {
         }
     }
 
+    /// FTP has no URL the kernel can fetch, so the file is published on loopback
+    /// with range support and the player is handed that address instead.
+    private func playOverFTP(_ entry: MediaEntry) async {
+        guard let client = ftp else { return }
+        do {
+            let size = UInt64(try await client.size(entry.url))
+            let mediaBridge = FTPMediaBridge()
+            let port = try mediaBridge.start(client: client, path: entry.url, size: size,
+                                             mime: Self.mime(for: entry.name))
+            bridge = mediaBridge
+            let local = "http://127.0.0.1:\(port)/stream"
+            await MainActor.run {
+                pending = PlayRequest(url: local, name: entry.name,
+                                      queue: siblings)
+            }
+        } catch {
+            errorText = error.localizedDescription
+        }
+    }
+
     private func play(_ entry: MediaEntry) {
+        if server.type == "ftp" {
+            Task { await playOverFTP(entry) }
+            return
+        }
         if isEmbyLike {
             let client = emby ?? EmbyClient(server: server)
             pending = PlayRequest(
@@ -304,6 +337,20 @@ struct ServerBrowserView: View {
         return emby.map { $0.streamURL(for: chosen) } ?? chosen.url
     }
 
+    private static func mime(for name: String) -> String {
+        switch (name as NSString).pathExtension.lowercased() {
+        case "mp4", "m4v": return "video/mp4"
+        case "mkv": return "video/x-matroska"
+        case "ts", "m2ts": return "video/mp2t"
+        case "mov": return "video/quicktime"
+        case "webm": return "video/webm"
+        case "mp3": return "audio/mpeg"
+        case "flac": return "audio/flac"
+        case "m4a": return "audio/mp4"
+        default: return "application/octet-stream"
+        }
+    }
+
     private func subtitleRank(_ name: String) -> Int {
         let lower = name.lowercased()
         if lower.contains("chs") || lower.contains("sc") || lower.contains("简体") || lower.contains("zh-cn") { return 0 }
@@ -342,6 +389,20 @@ struct ServerBrowserView: View {
                     entries = try await client.resume()
                 case .latest:
                     entries = try await client.latest()
+                }
+            } else if server.type == "ftp" {
+                guard let target = FTPTarget(server: server) else { throw ServerError.badAddress }
+                let client = ftp ?? FTPClient(target: target)
+                ftp = client
+                try await client.connect()
+                let listing = try await client.list(path.isEmpty ? target.path : path)
+                entries = listing.map { entry in
+                    MediaEntry(
+                        name: entry.name,
+                        url: entry.path,
+                        isDirectory: entry.isDirectory,
+                        size: entry.size
+                    )
                 }
             } else {
                 entries = try await WebDAVClient.list(server: server, path: path)
