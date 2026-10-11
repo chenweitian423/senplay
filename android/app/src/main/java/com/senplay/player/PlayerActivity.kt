@@ -51,6 +51,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -217,6 +219,9 @@ fun PlayerScreen(
     var upNext by remember { mutableStateOf<Pair<String, String>?>(null) }
     var inPip by remember { mutableStateOf(activity?.isInPictureInPictureMode == true) }
     var danmaku by remember { mutableStateOf<List<DanmakuItem>>(emptyList()) }
+    val scope = rememberCoroutineScope()
+    var castOpen by remember { mutableStateOf(false) }
+    var castTarget by remember { mutableStateOf<com.senplay.net.DlnaDevice?>(null) }
     var countdown by remember { mutableStateOf(0) }
 
     val autoHideSeconds = remember { store.prefInt(P_HIDE_AFTER, 3) }
@@ -352,6 +357,31 @@ fun PlayerScreen(
             enhancer?.enabled = false
             enhancer?.release()
         }
+    }
+
+    if (castOpen) {
+        com.senplay.ui.CastDialog(
+            onDismiss = { castOpen = false },
+            onCast = { device ->
+                castOpen = false
+                // Only a network address is castable: the renderer fetches the media
+                // itself, so a local file would need a server we do not run here.
+                if (url.startsWith("http://") || url.startsWith("https://")) {
+                    scope.launch {
+                        val started = com.senplay.net.Dlna.play(device, url, name)
+                        if (started) {
+                            castTarget = device
+                            player.pause()
+                            showHud("已投屏到 ${device.name}")
+                        } else {
+                            showHud("投屏失败")
+                        }
+                    }
+                } else {
+                    showHud("只有网络地址可以投屏")
+                }
+            }
+        )
     }
 
     LaunchedEffect(player) {
@@ -583,7 +613,15 @@ fun PlayerScreen(
                             DropdownMenuItem(text = { Text("截图") }, onClick = { moreMenuOpen = false })
                             DropdownMenuItem(text = { Text("媒体信息") }, onClick = { moreMenuOpen = false })
                             DropdownMenuItem(text = { Text("画面比例") }, onClick = { moreMenuOpen = false })
-                            DropdownMenuItem(text = { Text("投屏") }, onClick = { moreMenuOpen = false })
+                            DropdownMenuItem(
+                                text = {
+                                    Text(if (castTarget == null) "投屏" else "投屏到 ${castTarget?.name}")
+                                },
+                                onClick = {
+                                    moreMenuOpen = false
+                                    castOpen = true
+                                }
+                            )
                         }
                     }
                 }

@@ -18,7 +18,7 @@
 | 后台音频 | 完成 | iOS `UIBackgroundModes: audio`；Android 前台服务由 Media3 管理 |
 | 锁屏 / 控制中心 | 完成 | iOS `MPRemoteCommandCenter`：播放、暂停、切换、拖动、前后跳 |
 | 画中画 | 完成 | iOS 用 KSPlayerLayer 的 PiP 生命周期；Android `PictureInPictureParams` |
-| 投屏 | 完成 | AirPlay / 外部播放（`allowsExternalPlayback`），会话在接收端继续 |
+| 投屏 | 完成 | iOS 走 AirPlay / 外部播放；Android 另有 DLNA（见下） |
 | 章节跳转 | 完成 | iOS 读内核 `chapters`；**Android 未做**，Media3 不暴露章节轨 |
 
 ## 协议层
@@ -32,7 +32,7 @@
 | FTP | 完成 | iOS 自实现 RFC 959（被动模式 + REST 续传）；Android 用 commons-net |
 | SMB | **仅 Android** | 见下节 |
 | SFTP | **仅 Android** | 见下节 |
-| DLNA / UPnP | **未做** | 见下节 |
+| DLNA / UPnP | **仅 Android** | 见下节 |
 | 网盘（115 / 阿里 / 百度 / 123） | **未做** | 见下节 |
 | 在线字幕搜索 | **未做** | 见下节 |
 | IPTV M3U / M3U8 | 完成 | EXTINF 属性、分组、搜索、播放列队 |
@@ -48,7 +48,7 @@
 | 继续观看 | 完成 | Emby `/Items/Resume`、Plex `/library/onDeck` |
 | 最近添加 | 完成 | Emby 按 `DateCreated` 倒序、Plex `/library/recentlyAdded` |
 | 播放记录 | 完成 | 独立模块，逐条进度与删除 |
-| 合集 | 部分 | 服务器返回的 BoxSet 会作为可进入的目录呈现 |
+| 合集 | 完成 | Emby 的 BoxSet 与 Plex 的 collection，都作为第四个板块列出并可进入 |
 
 ## 字幕与弹幕
 
@@ -79,11 +79,16 @@ SFTP：NMSSH 的通道只有 `readFile(atPath:)`，没有偏移读取，等于�
 iOS 侧同类需求由 WebDAV 覆盖——Alist 之类的桥接层可以把 SMB、SFTP、网盘统一挂
 成 WebDAV。
 
-### DLNA / UPnP 未做
+### DLNA / UPnP 仅 Android
 
-SSDP 需要在 iOS 上发送多播，这要 `com.apple.developer.networking.multicast`
-entitlement，得向 Apple 申请。局域网发现改用了不依赖该授权的 mDNS，能覆盖
-媒体服务器的发现；DLNA 设备的发现与遥控则留空。
+Android 侧已实现完整链路：SSDP 多播发现 MediaRenderer、拉取设备描述拿
+AVTransport 控制地址、SOAP 下发 SetAVTransportURI / Play / Pause / Stop / Seek。
+投屏前会把当前地址递交给接收端，因此只有网络地址可投——本地文件需要额外跑一个
+文件服务器，没有做。
+
+iOS 侧缺同一块：SSDP 要发多播，需要 `com.apple.developer.networking.multicast`
+entitlement，得向 Apple 申请。局域网发现因此改用不依赖该授权的 mDNS，能覆盖媒体
+服务器的发现；DLNA 遥控留空。iOS 的投屏由 AirPlay 承担。
 
 ### 网盘未做
 
