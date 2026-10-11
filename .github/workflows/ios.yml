@@ -35,8 +35,10 @@ jobs:
       - name: Build unsigned app
         working-directory: ios
         run: |
-          # No pipefail: it would abort before the diagnostics branch runs.
+          # Both pipefail and errexit would abort before the diagnostics branch runs,
+          # so both are turned off and the exit code is captured by hand.
           set +o pipefail
+          set +e
           xcodebuild -project SenPlay.xcodeproj -scheme SenPlay -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
