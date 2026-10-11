@@ -88,9 +88,17 @@ keys with a real read on Android: 54
 `subtitle.bold` / `italic` / `outlineWidth` / `shadowWidth` / `ratioFix` / `hdrSubtitle`
 （同属字幕渲染，libass 从文件取样式）。
 
-**含义未从取证材料确定，不予猜测**：`library.showMine`（"显示我的媒体"）、
-`preferredVersion`（"视频首选版本"，下拉默认"默认"）。这两条的文案推不出行为，
-而 `showRemaining` 已经证明听起来合理的名字不是证据。
+**语义已从取证材料确定，但当前结构下无落点**：
+
+- `library.showMine`（"显示我的媒体"）。取证字符串里有 `kEmbyShowMyMedia`，指向
+  该开关控制 Emby 的用户视图入口（`/Users/{id}/Views`）。本实现的服务器浏览页
+  **顶层就是这一层视图**，没有单独的"我的媒体"入口可隐藏，所以开关无处安放。
+  要接它得先让导航多一层——那是结构改动，不是接线改动。
+- `library.preferredVersion`（"视频首选版本"，下拉默认"默认"）。取证字符串里有
+  `/SenPlayer/Model/MediaVersion.swift`，说明它在一部影片的多个版本之间选择。
+  Emby 的 `MediaSources` 确实是数组，每个源有 `Name` 和码率，所以数据在；但
+  **下拉的选项集没有出现在字符串里**（可能是代码内枚举或按服务器动态生成）。
+  选项不明就不猜——`showRemaining` 已经证明按名字推断行为会错。
 
 **尚未接线，但可做**：`video.decodeThreads` / `upscaling` / `hdrMetadata` / `hdrVivid`、
 `play.isoMode` / `useSystemProxy` / `pauseAutoLock`、`ui.controlBarStyle` /
