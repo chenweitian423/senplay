@@ -1107,6 +1107,7 @@ struct PlayerScreen: View {
             if !scrubbing { currentTime = current }
             subtitles.tick(at: current)
             applySkipRules(current: current, total: total)
+            NowPlaying.shared.update(time: current, duration: total, rate: speed)
         }
         player.onFinish = {
             isPlaying = false
@@ -1128,11 +1129,21 @@ struct PlayerScreen: View {
             Task { await subtitles.load(urlString: subtitleURL) }
         }
 
+        NowPlaying.shared.activate(
+            title: request.name,
+            duration: 0,
+            onPlay: { player.play() },
+            onPause: { player.pause() },
+            onToggle: { player.togglePlay() },
+            onSeek: { target in player.seek(to: target) }
+        )
+
         scheduleHide()
     }
 
     private func finish() {
         subtitles.stop()
+        NowPlaying.shared.deactivate()
         guard let kernel else { return }
         let seconds = kernel.currentTime
         let total = kernel.totalTime

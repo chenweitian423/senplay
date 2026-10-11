@@ -251,6 +251,35 @@ fun PlayerScreen(
             }
     }
 
+    fun advanceToNext(next: Pair<String, String>) {
+        upNext = null
+        countdown = 0
+        store.rememberProgress(url, name, player.currentPosition, player.duration.coerceAtLeast(0))
+        player.stop()
+        onPlayNext(next.first, next.second)
+    }
+
+    fun beginCountdown() {
+        val index = queue.indexOfFirst { it.first == url }
+        if (index < 0 || index + 1 >= queue.size) return
+        val next = queue[index + 1]
+        if (nextCountdown <= 0) {
+            advanceToNext(next)
+        } else {
+            upNext = next
+            countdown = nextCountdown
+        }
+    }
+
+    LaunchedEffect(upNext, countdown) {
+        if (upNext == null || countdown <= 0) return@LaunchedEffect
+        delay(1000)
+        countdown -= 1
+        if (countdown == 0) {
+            upNext?.let { advanceToNext(it) }
+        }
+    }
+
     LaunchedEffect(player) {
         while (true) {
             delay(250)
@@ -300,35 +329,6 @@ fun PlayerScreen(
             }
             SchemeRouter.dispatchCallback(context, sourceUri ?: Uri.EMPTY, url, player.currentPosition / 1000)
             player.release()
-        }
-    }
-
-    fun advanceToNext(next: Pair<String, String>) {
-        upNext = null
-        countdown = 0
-        store.rememberProgress(url, name, player.currentPosition, player.duration.coerceAtLeast(0))
-        player.stop()
-        onPlayNext(next.first, next.second)
-    }
-
-    fun beginCountdown() {
-        val index = queue.indexOfFirst { it.first == url }
-        if (index < 0 || index + 1 >= queue.size) return
-        val next = queue[index + 1]
-        if (nextCountdown <= 0) {
-            advanceToNext(next)
-        } else {
-            upNext = next
-            countdown = nextCountdown
-        }
-    }
-
-    LaunchedEffect(upNext, countdown) {
-        if (upNext == null || countdown <= 0) return@LaunchedEffect
-        delay(1000)
-        countdown -= 1
-        if (countdown == 0) {
-            upNext?.let { advanceToNext(it) }
         }
     }
 

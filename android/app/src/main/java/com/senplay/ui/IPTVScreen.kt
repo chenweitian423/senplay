@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -242,7 +243,7 @@ fun IPTVScreen(store: LibraryStore, onPlay: (PlayRequest) -> Unit) {
                 )
                 IconButton(onClick = { refresh() }, enabled = sources.isNotEmpty() && !refreshing) {
                     if (refreshing) {
-                        CircularProgressIndicator(modifier = Modifier.padding(4.dp))
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp))
                     } else {
                         Icon(Icons.Filled.Refresh, contentDescription = "刷新")
                     }
@@ -312,7 +313,8 @@ fun IPTVScreen(store: LibraryStore, onPlay: (PlayRequest) -> Unit) {
                 items(inGroup, key = { it.url + it.name }) { channel ->
                     ListItem(
                         headlineContent = { Text(channel.name, maxLines = 1) },
-                        supportingContent = channel.tvgId?.let { id -> { Text(id, maxLines = 1) } },
+                        supportingContent = channel.tvgId?.let { id: String ->
+                            @Composable { Text(id, maxLines = 1) } },
                         leadingContent = { Icon(Icons.Filled.Tv, contentDescription = null) },
                         modifier = Modifier.clickable {
                             onPlay(
@@ -342,7 +344,8 @@ fun IPTVScreen(store: LibraryStore, onPlay: (PlayRequest) -> Unit) {
             items(inGroup, key = { it.url + it.name }) { channel ->
                 ListItem(
                     headlineContent = { Text(channel.name, maxLines = 1) },
-                    supportingContent = channel.tvgId?.let { id -> { Text(id, maxLines = 1) } },
+                    supportingContent = channel.tvgId?.let { id: String ->
+                            @Composable { Text(id, maxLines = 1) } },
                     leadingContent = { Icon(Icons.Filled.Tv, contentDescription = null) },
                     modifier = Modifier.clickable {
                         onPlay(
