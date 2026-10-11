@@ -414,13 +414,23 @@ kMainWindowSizeHeight = 646      kMainWindowSizeWidth = 1087
 
 iOS 侧为此把渲染面从 `VideoPlayer` 换成裸 `AVPlayerLayer` 宿主（`PlayerSurface`），因为前者会强制安装系统控制栏。
 
-### 仍待推进
+### 1.3.0 追加（原「仍待推进」清单的落点）
 
-1. 键盘/遥控命令集（`Space ← → ↑ ↓ + - 0 F I`）——iPadOS 与遥控器场景
-2. OSD 叠层（实时码率 / 帧率 / 播放时间）——依赖内核上报的统计量
-3. 媒体库 tab 的 Plex / fnOS 协议枚举入口（当前 Emby / Jellyfin / 飞牛已通）
-4. 弹幕协议层（UI 与偏好已就位，搜索接口与渲染未接）
-5. 投屏（DLNA / AirPlay）、SMB / FTP / SFTP、网盘四家
-6. **内核**：`.github/kernel-probe` 正在验证 KSPlayer + FFmpegKit 的设备编译链路；
-   一旦通过，播放器只换解码路径，控制栏与手势层不动（KSPlayer 2.3.4 只发布内核、不含 UI，
-   正好契合这一分工）
+| 原条目 | 结果 |
+|---|---|
+| 键盘 / 遥控命令集 | iOS 已接（`UIKeyCommand`：`Space ← → ↑ ↓ + - 0 F I`）；Android 由遥控器事件与 DLNA 遥控覆盖 |
+| OSD 叠层 | 已接。iOS 读内核 `DynamicInfo`（码率 / 帧率 / 丢帧 / 已读 / 音画差），Android 读 `AnalyticsListener`（码率 / 丢帧 / 画面尺寸 / 缓冲）。开关为 `pref.ui.showOSD`，两端同名 |
+| Plex / fnOS 协议枚举入口 | 均已进服务器类型列表 |
+| 弹幕协议层 | 已接，dandanplay 兼容端点，端点由用户自填 |
+| 投屏 / SMB / FTP / SFTP / 网盘 | 投屏：iOS AirPlay、Android DLNA。FTP 双端。SMB 与 SFTP 仅 Android（原因见 `COVERAGE.md`）。网盘走 S3 对象存储，双端 |
+| 内核 | 已落地：iOS KSPlayer 2.3.4 + FFmpegKit 6.1.4，Android Media3 1.5.1 |
+
+### 尚未落地
+
+只剩三项，且都不是实现能力的问题：
+
+1. **iOS 的 SMB**：AMSMB2 没有可用的公开 API（文件句柄是 internal 的 final class）。
+2. **iOS 的 SFTP**：Citadel 有偏移读取但要求 iOS 17，而参考实现的 `MinimumOSVersion` 是 10.0；本机无法起 sshd，自写协议栈无从验证。
+3. **iOS 的 DLNA**：SSDP 需要 `com.apple.developer.networking.multicast`，须向 Apple 申请。
+
+三者的判断依据写在 `docs/COVERAGE.md`。

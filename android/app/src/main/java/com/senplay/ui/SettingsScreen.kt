@@ -152,6 +152,7 @@ fun SettingsScreen(store: LibraryStore) {
         PrefSwitch(store, "pref.ui.fastSeekButtons", "快退快进按钮", null, false)
         PrefSwitch(store, "pref.ui.switchMediaButton", "切换媒体按钮", null, true)
         PrefSwitch(store, "pref.ui.screenshotButton", "截图按钮", null, true)
+        PrefSwitch(store, "pref.ui.showOSD", "显示状态信息", "左上角显示实时码率、帧率与丢帧", false)
         PrefSwitch(store, "pref.ui.showStartTitle", "开始播放提示标题", null, true)
         PrefSwitch(store, "pref.ui.showSkipTip", "即将跳过片头/片尾", null, true)
         PrefSwitch(store, "pref.ui.showCloudThrottleTip", "网盘限速提示", null, true)

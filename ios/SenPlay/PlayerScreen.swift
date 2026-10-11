@@ -263,6 +263,21 @@ final class KernelPlayer: NSObject, ObservableObject {
         }
     }
 
+    /// Live statistics the kernel keeps for its own OSD. Polled rather than
+    /// observed: the object publishes on every frame and the overlay only needs a
+    /// readable refresh.
+    func statistics() -> OSDStats? {
+        guard let info = layer.player.dynamicInfo else { return nil }
+        return OSDStats(
+            videoBitrate: info.videoBitrate,
+            audioBitrate: info.audioBitrate,
+            fps: info.displayFPS,
+            dropped: info.droppedVideoFrameCount + info.droppedVideoPacketCount,
+            bytesRead: info.bytesRead,
+            syncDiff: info.audioVideoSyncDiff
+        )
+    }
+
     /// Chapter markers reported by the demuxer, used for the jump list.
     func chapters() -> [Chapter] {
         layer.player.chapters
@@ -464,6 +479,7 @@ struct PlayerScreen: View {
     @AppStorage(PrefKey.danmakuSpeed) private var danmakuSpeed = 0.5
     @AppStorage(PrefKey.danmakuArea) private var danmakuArea = 0.15
     @AppStorage(PrefKey.danmakuSkipShort) private var danmakuSkipShort = true
+    @AppStorage("pref.ui.showOSD") private var showOSD = false
     @AppStorage(PrefKey.preloadMode) private var preloadMode = "none"
     @AppStorage(PrefKey.audioEnhance) private var audioEnhance = true
     @AppStorage(PrefKey.multiChannel) private var multiChannel = false
@@ -498,6 +514,7 @@ struct PlayerScreen: View {
     @State private var upNext: QueueItem?
     @State private var danmakuItems: [DanmakuItem] = []
     @State private var keyRouter = KeyCommandRouter()
+    @State private var stats: OSDStats?
     @State private var countdown: Int = 0
 
     private let speeds: [Float] = [0.5, 0.75, 1, 1.25, 1.5, 2, 3]
@@ -524,6 +541,15 @@ struct PlayerScreen: View {
                     KernelSurface(player: kernel)
                         .ignoresSafeArea()
                         .scaleEffect(zoom)
+                }
+
+                if showOSD, let stats, !stats.isEmpty {
+                    VStack {
+                        osdOverlay(stats)
+                        Spacer()
+                    }
+                    .padding(.top, 54)
+                    .padding(.horizontal, 16)
                 }
 
                 KeyCommandSurface(router: keyRouter)
@@ -590,6 +616,15 @@ struct PlayerScreen: View {
         .statusBar(hidden: true)
         .onAppear(perform: start)
         .onDisappear(perform: finish)
+        // Polled once a second: the kernel publishes on every frame, and the overlay
+        // only needs to stay readable.
+        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
+            guard showOSD else {
+                if stats != nil { stats = nil }
+                return
+            }
+            stats = kernel?.statistics()
+        }
     }
 
     // MARK: gestures
@@ -928,6 +963,11 @@ struct PlayerScreen: View {
                                 }
                             }
                         case .more:
+                            outputRow(title: "显示状态信息",
+                                      detail: showOSD ? "开" : "关",
+                                      active: showOSD) {
+                                showOSD.toggle()
+                            }
                             let chapters = kernel?.chapters() ?? []
                             if !chapters.isEmpty {
                                 Text("章节（\(chapters.count)）")
@@ -986,6 +1026,29 @@ struct PlayerScreen: View {
             .cornerRadius(14)
             .padding(.horizontal, 28)
         }
+    }
+
+    /// Live counters, in the corner where they do not fight the controls.
+    private func osdOverlay(_ stats: OSDStats) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("视频 \(Double(stats.videoBitrate).bitrateText)")
+            Text("音频 \(Double(stats.audioBitrate).bitrateText)")
+            Text(String(format: "帧率 %.1f", stats.fps))
+            if stats.dropped > 0 {
+                Text("丢帧 \(stats.dropped)")
+            }
+            Text("已读 \(stats.bytesRead.sizeText)")
+            if abs(stats.syncDiff) > 0.001 {
+                Text(String(format: "音画差 %.0f ms", stats.syncDiff * 1000))
+            }
+        }
+        .font(.system(size: 11, weight: .medium, design: .monospaced))
+        .foregroundColor(.white)
+        .padding(8)
+        .background(Color.black.opacity(0.45))
+        .cornerRadius(6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .allowsHitTesting(false)
     }
 
     private func outputRow(title: String, detail: String, active: Bool,
@@ -1412,5 +1475,36 @@ struct PlayerScreen: View {
     private func close() {
         let seconds = kernel?.currentTime ?? 0
         onClose(seconds.isFinite ? seconds : 0)
+    }
+}
+
+
+/// Snapshot of the kernel's live counters, taken once a second.
+struct OSDStats {
+    var videoBitrate: Int
+    var audioBitrate: Int
+    var fps: Double
+    var dropped: UInt32
+    var bytesRead: Int64
+    var syncDiff: Double
+
+    var isEmpty: Bool {
+        videoBitrate == 0 && audioBitrate == 0 && fps == 0 && bytesRead == 0
+    }
+}
+
+private extension Double {
+    /// Bitrates arrive in bits per second and read better in the units people quote
+    /// them in.
+    var bitrateText: String {
+        if self >= 1_000_000 { return String(format: "%.2f Mbps", self / 1_000_000) }
+        if self >= 1_000 { return String(format: "%.0f kbps", self / 1_000) }
+        return String(format: "%.0f bps", self)
+    }
+}
+
+private extension Int64 {
+    var sizeText: String {
+        ByteCountFormatter.string(fromByteCount: self, countStyle: .file)
     }
 }

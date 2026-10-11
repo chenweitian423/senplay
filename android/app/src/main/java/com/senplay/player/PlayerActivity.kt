@@ -83,6 +83,7 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import com.senplay.core.Http
 import com.senplay.core.DanmakuItem
+import com.senplay.ui.OsdStats
 import com.senplay.core.LibraryStore
 import com.senplay.deeplink.SchemeRouter
 import com.senplay.ui.SenPlayTheme
@@ -183,6 +184,7 @@ private const val P_DANMAKU_SKIP_SHORT = "pref.danmaku.skipShort"
 private const val P_PRELOAD_MODE = "pref.play.preloadMode"
 private const val P_AUDIO_ENHANCE = "pref.audio.enhance"
 private const val P_MULTI_CHANNEL = "pref.audio.multiChannel"
+private const val P_SHOW_OSD = "pref.ui.showOSD"
 
 private enum class DragKind { NONE, SEEK, BRIGHTNESS, VOLUME }
 
@@ -220,6 +222,8 @@ fun PlayerScreen(
     var inPip by remember { mutableStateOf(activity?.isInPictureInPictureMode == true) }
     var danmaku by remember { mutableStateOf<List<DanmakuItem>>(emptyList()) }
     val scope = rememberCoroutineScope()
+    var showOSD by remember { mutableStateOf(store.prefBool(P_SHOW_OSD, false)) }
+    var osd by remember { mutableStateOf<OsdStats?>(null) }
     var castOpen by remember { mutableStateOf(false) }
     var castTarget by remember { mutableStateOf<com.senplay.net.DlnaDevice?>(null) }
     var countdown by remember { mutableStateOf(0) }
@@ -342,6 +346,48 @@ fun PlayerScreen(
         val endpoint = com.senplay.core.danmakuEndpoints(store).firstOrNull() ?: return@LaunchedEffect
         val keyword = url.substringAfterLast('/').substringBeforeLast('.')
         danmaku = com.senplay.core.DanmakuLoader.fetch(keyword, endpoint)
+    }
+
+    // Live counters. Media3 reports these through an analytics listener rather than
+    // exposing them on the player, so they are captured as they arrive.
+    DisposableEffect(player) {
+        val listener = object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+            override fun onVideoInputFormatChanged(
+                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                format: androidx.media3.common.Format,
+                decoderReuseEvaluation: androidx.media3.exoplayer.DecoderReuseEvaluation?
+            ) {
+                osd = (osd ?: OsdStats()).copy(videoBitrate = format.bitrate)
+            }
+
+            override fun onAudioInputFormatChanged(
+                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                format: androidx.media3.common.Format,
+                decoderReuseEvaluation: androidx.media3.exoplayer.DecoderReuseEvaluation?
+            ) {
+                osd = (osd ?: OsdStats()).copy(audioBitrate = format.bitrate)
+            }
+
+            override fun onDroppedVideoFrames(
+                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                droppedFrames: Int,
+                elapsedMs: Long
+            ) {
+                osd = (osd ?: OsdStats()).copy(dropped = droppedFrames)
+            }
+
+            override fun onVideoSizeChanged(
+                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                videoSize: androidx.media3.common.VideoSize
+            ) {
+                osd = (osd ?: OsdStats()).copy(
+                    width = videoSize.width,
+                    height = videoSize.height
+                )
+            }
+        }
+        player.addAnalyticsListener(listener)
+        onDispose { player.removeAnalyticsListener(listener) }
     }
 
     // LoudnessEnhancer is Android's own gain stage — the counterpart of the iOS
@@ -556,6 +602,16 @@ fun PlayerScreen(
             }
         )
 
+        if (showOSD) {
+            osd?.let { current ->
+                com.senplay.ui.OsdOverlay(
+                    stats = current,
+                    positionMs = position,
+                    bufferedMs = player.bufferedPosition
+                )
+            }
+        }
+
         if (danmakuEnabled && danmaku.isNotEmpty() &&
             !(danmakuSkipShort && duration in 1..599_999L)
         ) {
@@ -613,6 +669,14 @@ fun PlayerScreen(
                             DropdownMenuItem(text = { Text("截图") }, onClick = { moreMenuOpen = false })
                             DropdownMenuItem(text = { Text("媒体信息") }, onClick = { moreMenuOpen = false })
                             DropdownMenuItem(text = { Text("画面比例") }, onClick = { moreMenuOpen = false })
+                            DropdownMenuItem(
+                                text = { Text(if (showOSD) "隐藏状态信息" else "显示状态信息") },
+                                onClick = {
+                                    moreMenuOpen = false
+                                    showOSD = !showOSD
+                                    store.setPrefBool(P_SHOW_OSD, showOSD)
+                                }
+                            )
                             DropdownMenuItem(
                                 text = {
                                     Text(if (castTarget == null) "投屏" else "投屏到 ${castTarget?.name}")

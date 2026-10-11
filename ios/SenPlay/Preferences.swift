@@ -336,6 +336,7 @@ private struct InterfacePrefs: View {
     @AppStorage(PrefKey.screenshotButton) private var screenshotButton = true
     @AppStorage(PrefKey.showStartTitle) private var showStartTitle = true
     @AppStorage(PrefKey.showSkipTip) private var showSkipTip = true
+    @AppStorage("pref.ui.showOSD") private var showOSD = false
     @AppStorage(PrefKey.showCloudThrottleTip) private var showCloudThrottleTip = true
 
     var body: some View {
@@ -371,6 +372,7 @@ private struct InterfacePrefs: View {
             Section("提示") {
                 Toggle("开始播放提示标题", isOn: $showStartTitle)
                 Toggle("即将跳过片头/片尾", isOn: $showSkipTip)
+                Toggle("显示状态信息", isOn: $showOSD)
                 Toggle("网盘限速提示", isOn: $showCloudThrottleTip)
             }
         }
