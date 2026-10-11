@@ -22,6 +22,7 @@ behaviour contract* of a reference app — **no original code, no original asset
 
 ## Docs
 
+- `docs/COVERAGE.md` — what is implemented, and the three things that are not, with reasons
 - `docs/PATCH-VERDICT.md` — was the reference binary patched in place? (function-level answer)
 - `docs/UI-SPEC.md` — screen-by-screen specification with control types, live values and defaults
 - `docs/EVIDENCE.md` — reverse-engineering summary, including three corrections to the early conclusions
