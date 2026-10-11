@@ -37,16 +37,33 @@ def ios_keys() -> set[str]:
 
 
 def android_keys() -> set[str]:
-    keys: set[str] = set()
+    """Android preference names, normalised to the stored form.
+
+    LibraryStore's accessors prepend "pref." themselves, so the literals in the Kotlin
+    source deliberately do not carry it. Comparing those literals against iOS's keys
+    would report every key as missing — and assuming the prefix is already present is
+    the opposite mistake, which is how `pref.pref.ui.showOSD` got written once. Both
+    spellings are accepted here and normalised to the stored name.
+    """
+    literals: set[str] = set()
     base = ROOT / "android" / "app" / "src" / "main" / "java" / "com" / "senplay"
     for path in base.rglob("*.kt"):
         text = path.read_text(encoding="utf-8")
-        keys |= {k for k in re.findall(r'private const val P_\w+ = "([^"]+)"', text)
-                 if k.startswith("pref.")}
-        keys |= {k for k in re.findall(r'"([^"]+)"', text) if k.startswith("pref.")}
-    # The bare placeholder inside a doc comment is not a key.
-    keys.discard("pref.")
-    keys.discard("pref.danmaku.endpoint.N")
+        literals |= set(re.findall(r'private const val P_\w+ = "([^"]+)"', text))
+        literals |= set(re.findall(r'(?:Pref(?:Switch|Choice|Slider|Text)\(\s*store,\s*)"([^"]+)"', text))
+        literals |= {k for k in re.findall(r'"([^"]+)"', text) if k.startswith("pref.")}
+        literals |= set(re.findall(r'pref(?:Bool|Int|Float|String)\("([^"]+)"', text))
+
+    keys: set[str] = set()
+    for literal in literals:
+        if not literal or literal == "pref.":
+            continue
+        # Storage keys outside the preference namespace, and the placeholder that
+        # appears in a doc comment rather than in code.
+        if literal.startswith("iptv.") or literal.endswith(".N") or "$" in literal:
+            continue
+        normalized = literal if literal.startswith("pref.") else "pref." + literal
+        keys.add(normalized)
     return keys
 
 

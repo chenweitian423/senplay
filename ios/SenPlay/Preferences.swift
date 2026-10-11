@@ -337,6 +337,7 @@ private struct InterfacePrefs: View {
     @AppStorage(PrefKey.showStartTitle) private var showStartTitle = true
     @AppStorage(PrefKey.showSkipTip) private var showSkipTip = true
     @AppStorage("pref.ui.showOSD") private var showOSD = false
+    @AppStorage("pref.play.rememberSpeed") private var rememberSpeed = true
     @AppStorage(PrefKey.showCloudThrottleTip) private var showCloudThrottleTip = true
 
     var body: some View {
@@ -373,6 +374,7 @@ private struct InterfacePrefs: View {
                 Toggle("开始播放提示标题", isOn: $showStartTitle)
                 Toggle("即将跳过片头/片尾", isOn: $showSkipTip)
                 Toggle("显示状态信息", isOn: $showOSD)
+                Toggle("记住播放倍速", isOn: $rememberSpeed)
                 Toggle("网盘限速提示", isOn: $showCloudThrottleTip)
             }
         }

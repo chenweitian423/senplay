@@ -163,33 +163,35 @@ class PlayerActivity : ComponentActivity() {
 
 private val SPEEDS = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f, 3f)
 
-private const val P_HIDE_AFTER = "pref.ui.autoHideSeconds"
-private const val P_FORWARD = "pref.play.forwardSeconds"
-private const val P_BACKWARD = "pref.play.backwardSeconds"
-private const val P_PROGRESS_DOT = "pref.ui.progressDot"
-private const val P_TIME_MODE = "pref.ui.timeMode"
-private const val P_FAST_SEEK_BUTTONS = "pref.ui.fastSeekButtons"
-private const val P_SCREENSHOT_BUTTON = "pref.ui.screenshotButton"
-private const val P_DOUBLE_LEFT = "pref.gesture.doubleLeft"
-private const val P_DOUBLE_CENTER = "pref.gesture.doubleCenter"
-private const val P_DOUBLE_RIGHT = "pref.gesture.doubleRight"
-private const val P_LEFT_VERTICAL = "pref.gesture.leftVertical"
-private const val P_RIGHT_VERTICAL = "pref.gesture.rightVertical"
-private const val P_USE_APP_BRIGHTNESS = "pref.gesture.useAppBrightness"
-private const val P_RESUME = "pref.play.resumeFromLast"
-private const val P_AUTO_NEXT = "pref.play.autoNext"
-private const val P_SKIP_INTRO = "pref.play.skipIntroSeconds"
-private const val P_SKIP_OUTRO = "pref.play.skipOutroSeconds"
-private const val P_NEXT_COUNTDOWN = "pref.play.autoNextCountdown"
-private const val P_DANMAKU_ENABLED = "pref.danmaku.enabled"
-private const val P_DANMAKU_SIZE = "pref.danmaku.size"
-private const val P_DANMAKU_SPEED = "pref.danmaku.speed"
-private const val P_DANMAKU_AREA = "pref.danmaku.area"
-private const val P_DANMAKU_SKIP_SHORT = "pref.danmaku.skipShort"
-private const val P_PRELOAD_MODE = "pref.play.preloadMode"
-private const val P_AUDIO_ENHANCE = "pref.audio.enhance"
-private const val P_MULTI_CHANNEL = "pref.audio.multiChannel"
-private const val P_SHOW_OSD = "pref.ui.showOSD"
+private const val P_HIDE_AFTER = "ui.autoHideSeconds"
+private const val P_FORWARD = "play.forwardSeconds"
+private const val P_BACKWARD = "play.backwardSeconds"
+private const val P_PROGRESS_DOT = "ui.progressDot"
+private const val P_TIME_MODE = "ui.timeMode"
+private const val P_FAST_SEEK_BUTTONS = "ui.fastSeekButtons"
+private const val P_SCREENSHOT_BUTTON = "ui.screenshotButton"
+private const val P_DOUBLE_LEFT = "gesture.doubleLeft"
+private const val P_DOUBLE_CENTER = "gesture.doubleCenter"
+private const val P_DOUBLE_RIGHT = "gesture.doubleRight"
+private const val P_LEFT_VERTICAL = "gesture.leftVertical"
+private const val P_RIGHT_VERTICAL = "gesture.rightVertical"
+private const val P_USE_APP_BRIGHTNESS = "gesture.useAppBrightness"
+private const val P_RESUME = "play.resumeFromLast"
+private const val P_AUTO_NEXT = "play.autoNext"
+private const val P_SKIP_INTRO = "play.skipIntroSeconds"
+private const val P_SKIP_OUTRO = "play.skipOutroSeconds"
+private const val P_NEXT_COUNTDOWN = "play.autoNextCountdown"
+private const val P_DANMAKU_ENABLED = "danmaku.enabled"
+private const val P_DANMAKU_SIZE = "danmaku.size"
+private const val P_DANMAKU_SPEED = "danmaku.speed"
+private const val P_DANMAKU_AREA = "danmaku.area"
+private const val P_DANMAKU_SKIP_SHORT = "danmaku.skipShort"
+private const val P_PRELOAD_MODE = "play.preloadMode"
+private const val P_AUDIO_ENHANCE = "audio.enhance"
+private const val P_MULTI_CHANNEL = "audio.multiChannel"
+private const val P_SHOW_OSD = "ui.showOSD"
+private const val P_REMEMBER_SPEED = "play.rememberSpeed"
+private const val P_LAST_SPEED = "play.lastSpeed"
 
 private enum class DragKind { NONE, SEEK, BRIGHTNESS, VOLUME }
 
@@ -210,7 +212,6 @@ fun PlayerScreen(
     val store = remember { LibraryStore.get(context) }
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
 
-    var speed by remember { mutableStateOf(1f) }
     var speedMenuOpen by remember { mutableStateOf(false) }
     var moreMenuOpen by remember { mutableStateOf(false) }
 
@@ -228,6 +229,12 @@ fun PlayerScreen(
     var danmaku by remember { mutableStateOf<List<DanmakuItem>>(emptyList()) }
     val scope = rememberCoroutineScope()
     var showOSD by remember { mutableStateOf(store.prefBool(P_SHOW_OSD, false)) }
+    val rememberSpeed = remember { store.prefBool(P_REMEMBER_SPEED, true) }
+    var speed by remember {
+        mutableStateOf(
+            if (rememberSpeed) store.prefFloat(P_LAST_SPEED, 1f) else 1f
+        )
+    }
     var osd by remember { mutableStateOf<OsdStats?>(null) }
     var castOpen by remember { mutableStateOf(false) }
     var castTarget by remember { mutableStateOf<com.senplay.net.DlnaDevice?>(null) }
@@ -291,6 +298,10 @@ fun PlayerScreen(
                 val resume = if (startPositionMs > 0L) startPositionMs
                 else if (resumeFromLast) store.savedPosition(url) else 0L
                 if (resume > 0L) controller.seekTo(resume)
+                // Restore the rate the viewer last chose, if they asked for that.
+                if (rememberSpeed && speed != 1f) {
+                    controller.setPlaybackSpeed(speed)
+                }
                 controller.playWhenReady = true
                 connection.value = controller
             },
@@ -325,6 +336,13 @@ fun PlayerScreen(
             )
             delay(1000)
         }
+    }
+
+    /** Every rate change goes through here so the stored value matches what plays. */
+    fun setSpeed(value: Float) {
+        speed = value
+        player.setPlaybackSpeed(value)
+        if (rememberSpeed) store.setPrefFloat(P_LAST_SPEED, value)
     }
 
     fun showHud(text: String) {

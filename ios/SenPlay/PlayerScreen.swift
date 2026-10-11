@@ -480,6 +480,8 @@ struct PlayerScreen: View {
     @AppStorage(PrefKey.danmakuArea) private var danmakuArea = 0.15
     @AppStorage(PrefKey.danmakuSkipShort) private var danmakuSkipShort = true
     @AppStorage("pref.ui.showOSD") private var showOSD = false
+    @AppStorage("pref.play.rememberSpeed") private var rememberSpeed = true
+    @AppStorage("pref.play.lastSpeed") private var lastSpeed = 1.0
     @AppStorage(PrefKey.preloadMode) private var preloadMode = "none"
     @AppStorage(PrefKey.audioEnhance) private var audioEnhance = true
     @AppStorage(PrefKey.multiChannel) private var multiChannel = false
@@ -825,8 +827,7 @@ struct PlayerScreen: View {
                     Menu {
                         ForEach(speeds, id: \.self) { value in
                             Button(value == 1 ? "1.0x（默认）" : String(format: "%.2fx", value)) {
-                                speed = value
-                                kernel?.setRate(value)
+                                setSpeed(value)
                                 toast = String(format: "倍速 %.2fx", value)
                                 scheduleToastClear()
                             }
@@ -1400,6 +1401,8 @@ struct PlayerScreen: View {
 
         loadDanmaku()
 
+        applyRememberedSpeed()
+
         keyRouter.handler = { key in
             switch key {
             case "toggle": kernel?.togglePlay()
@@ -1412,14 +1415,11 @@ struct PlayerScreen: View {
                 volume = max(volume - 0.1, 0)
                 kernel?.setVolume(Float(volume))
             case "rateUp":
-                speed = min(speed + 0.25, 3)
-                kernel?.setRate(speed)
+                setSpeed(min(speed + 0.25, 3))
             case "rateDown":
-                speed = max(speed - 0.25, 0.25)
-                kernel?.setRate(speed)
+                setSpeed(max(speed - 0.25, 0.25))
             case "reset":
-                speed = 1
-                kernel?.setRate(1)
+                setSpeed(1)
             case "fullscreen": controlsVisible.toggle()
             case "info": activePanel = activePanel == .more ? nil : .more
             default: break
@@ -1455,6 +1455,24 @@ struct PlayerScreen: View {
                 if danmakuSkipShort, duration > 0, duration < 600 { return }
                 danmakuItems = items
             }
+        }
+    }
+
+    /// Restores the rate the viewer last chose. Off by default only when the
+    /// preference says so — most people who set 1.5x want it next time too.
+    private func applyRememberedSpeed() {
+        guard rememberSpeed, lastSpeed > 0, lastSpeed != 1 else { return }
+        speed = Float(lastSpeed)
+        kernel?.setRate(Float(lastSpeed))
+    }
+
+    /// Every rate change goes through here so the preference stays in step with what
+    /// is actually playing.
+    private func setSpeed(_ value: Float) {
+        speed = value
+        kernel?.setRate(value)
+        if rememberSpeed {
+            lastSpeed = Double(value)
         }
     }
 

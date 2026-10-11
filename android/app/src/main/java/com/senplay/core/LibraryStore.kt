@@ -124,6 +124,15 @@ class LibraryStore private constructor(context: Context) {
     fun prefString(key: String, def: String): String = prefs.getString(PREF_PREFIX + key, def) ?: def
     fun setPrefString(key: String, value: String) = prefs.edit().putString(PREF_PREFIX + key, value).apply()
 
+    /**
+     * Raw storage, outside the "pref." namespace.
+     *
+     * Playlists and channel lists are user data, not playback preferences: clearing
+     * those must not take the user's IPTV sources with them.
+     */
+    fun value(key: String): String? = prefs.getString(key, null)
+    fun setValue(key: String, value: String) = prefs.edit().putString(key, value).apply()
+
     fun clearPreferences() {
         val editor = prefs.edit()
         prefs.all.keys.filter { it.startsWith(PREF_PREFIX) }.forEach { editor.remove(it) }

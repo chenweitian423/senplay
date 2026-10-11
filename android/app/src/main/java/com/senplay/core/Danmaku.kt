@@ -97,5 +97,5 @@ object DanmakuLoader {
  */
 fun danmakuEndpoints(store: LibraryStore): List<String> =
     (1..5).mapNotNull { index ->
-        store.prefString("pref.danmaku.endpoint.$index", "").takeIf { it.isNotBlank() }
+        store.prefString("danmaku.endpoint.$index", "").takeIf { it.isNotBlank() }
     }

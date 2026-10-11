@@ -115,7 +115,7 @@ private const val P_IPTV_SOURCES = "iptv.sources"
 private const val P_IPTV_CHANNELS = "iptv.channels"
 
 private fun loadSources(store: LibraryStore): List<Pair<String, String>> = runCatching {
-    val raw = store.prefString(P_IPTV_SOURCES, "")
+    val raw = store.value(P_IPTV_SOURCES).orEmpty()
     if (raw.isBlank()) return@runCatching emptyList()
     val array = JSONArray(raw)
     (0 until array.length()).map { index ->
@@ -132,11 +132,11 @@ private fun saveSources(store: LibraryStore, sources: List<Pair<String, String>>
             put("url", url)
         })
     }
-    store.setPrefString(P_IPTV_SOURCES, array.toString())
+    store.setValue(P_IPTV_SOURCES, array.toString())
 }
 
 private fun loadChannels(store: LibraryStore): List<Channel> = runCatching {
-    val raw = store.prefString(P_IPTV_CHANNELS, "")
+    val raw = store.value(P_IPTV_CHANNELS).orEmpty()
     if (raw.isBlank()) return@runCatching emptyList()
     val array = JSONArray(raw)
     (0 until array.length()).map { index ->
@@ -162,7 +162,7 @@ private fun saveChannels(store: LibraryStore, channels: List<Channel>) {
             channel.tvgId?.let { put("tvgId", it) }
         })
     }
-    store.setPrefString(P_IPTV_CHANNELS, array.toString())
+    store.setValue(P_IPTV_CHANNELS, array.toString())
 }
 
 private fun fetchPlaylist(url: String): String {
