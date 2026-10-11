@@ -31,8 +31,10 @@
 | Plex | 完成 | 独立 XML 客户端，token 走密码字段，直连 `/library/parts` |
 | FTP | 完成 | iOS 自实现 RFC 959（被动模式 + REST 续传）；Android 用 commons-net |
 | SMB | **仅 Android** | 见下节 |
+| SFTP | **仅 Android** | 见下节 |
 | DLNA / UPnP | **未做** | 见下节 |
 | 网盘（115 / 阿里 / 百度 / 123） | **未做** | 见下节 |
+| 在线字幕搜索 | **未做** | 见下节 |
 | IPTV M3U / M3U8 | 完成 | EXTINF 属性、分组、搜索、播放列队 |
 | 局域网发现 | 完成 | mDNS（`_http` / `_https` / `_webdav` / `_smb`），双端 |
 
@@ -60,12 +62,22 @@
 
 ## 三处未做，以及原因
 
-### SMB 在 iOS 上缺失
+### SMB 与 SFTP 在 iOS 上缺失
 
-AMSMB2 在 3.4.0 与 4.0.x 上都几乎没有公开 API：`SMB2Manager` 的公开成员只有
-初始化器与镜像支持，文件句柄是 internal 的 final class，ObjC 兼容层只暴露六个
-`__` 前缀方法。与其引入一个打不开文件的依赖，不如让 iOS 的服务器类型列表里
-不出现 SMB。iOS 侧同类需求由 WebDAV 覆盖。
+两者在 Swift 生态里都缺少可用的实现，原因一致：库要么没有公开 API，要么没有
+按偏移读取的能力，而播放器必须要后者。
+
+SMB：AMSMB2 在 3.4.0 与 4.0.x 上都几乎没有公开面——`SMB2Manager` 的公开成员
+只有初始化器与镜像支持，文件句柄是 internal 的 final class，ObjC 兼容层只暴露
+六个 `__` 前缀方法。
+
+SFTP：NMSSH 的通道只有 `readFile(atPath:)`，没有偏移读取，等于每次 seek 都要
+从头下载。swift-nio-ssh 提供的是 SSH 传输层，SFTP 子系统仍要自己实现（约数百行
+协议代码），性价比不成立。
+
+与其引入一个打不开文件的依赖，不如让 iOS 的服务器类型列表里不出现这两个协议。
+iOS 侧同类需求由 WebDAV 覆盖——Alist 之类的桥接层可以把 SMB、SFTP、网盘统一挂
+成 WebDAV。
 
 ### DLNA / UPnP 未做
 
@@ -78,6 +90,12 @@ entitlement，得向 Apple 申请。局域网发现改用了不依赖该授权�
 各家开放平台的授权链路与接口差异很大，且都要求用户以自己的账号登录并授予
 应用权限。实际使用中，Alist 之类的桥接层可以把网盘挂成 WebDAV，而 WebDAV 已经
 支持——所以更合理的路径是让用户自行桥接，而不是在客户端里塞四套 OAuth。
+
+### 在线字幕搜索未做
+
+内核带 OpenSubtitles 之类的源接口，但那需要把各家的 API key 内置进客户端。
+更干净的做法是让用户自备：外挂字幕已经支持从服务器目录自动匹配，把字幕文件
+放在媒体旁边即可，不依赖任何第三方服务。
 
 ## 与参考实现的差异清单
 

@@ -8,6 +8,7 @@ behaviour contract* of a reference app — **no original code, no original asset
 | `senplay://` deep links (`x-callback-url/play`, `download`, `importserver`, `importicon`) | reference build's shipped `URLSchemes.md` | done |
 | Media servers: WebDAV, Emby / Jellyfin / 飞牛 fnOS, FTP | server browse + direct-play endpoints | done |
 | SMB shares | native reader | Android only (see below) |
+| SFTP | Media3 data source | Android only (see below) |
 | Media library: poster wall, search, five sort keys, continue watching, recently added | UI behaviour | done |
 | Playback: local files, network URLs, side-loaded subtitles, resume, continuous play, intro/outro skip | UI behaviour | done |
 | Player gestures: double-tap zones, vertical brightness/volume, horizontal seek, pinch zoom, long-press speed | gesture preference map | done |
@@ -18,7 +19,8 @@ behaviour contract* of a reference app — **no original code, no original asset
 | Local network discovery over mDNS | UI behaviour | done |
 | Settings surface: the ten preference groups, applied to the kernel | captured settings window | done |
 | Kernel: MKV / TS / ASS / HDR / Dolby Vision | KSPlayer 2.3.4 + FFmpegKit 6.1.4 on iOS, Media3 on Android | done |
-| Plex, netdisk providers, DLNA casting | — | not started |
+| Plex (XML client on both platforms) | server API | done |
+| Netdisk providers, DLNA discovery | — | not started, see `docs/COVERAGE.md` |
 
 ## Docs
 
