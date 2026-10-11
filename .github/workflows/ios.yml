@@ -14,7 +14,9 @@ permissions:
 
 jobs:
   ios:
-    runs-on: macos-15
+    # macos-26 carries the Xcode 26 toolchain; the older image's Swift 6.0 front end
+    # rejects part of the KSPlayer 2.3.4 graph that this project builds against.
+    runs-on: macos-26
     # The KSPlayer + FFmpegKit graph adds roughly twelve minutes of first-build time.
     timeout-minutes: 60
     steps:
@@ -33,8 +35,18 @@ jobs:
       - name: Build unsigned app
         working-directory: ios
         run: |
-          set -euo pipefail
-          xcodebuild -project SenPlay.xcodeproj -scheme SenPlay -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" build
+          set -o pipefail
+          xcodebuild -project SenPlay.xcodeproj -scheme SenPlay -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" \
+            build 2>&1 | tee xcodebuild.log | tail -n 40
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            echo "--- compiler diagnostics ---"
+            grep -E "error:|warning: .*error" xcodebuild.log | head -n 40
+            exit "$status"
+          fi
 
       - name: Package IPA
         working-directory: ios
