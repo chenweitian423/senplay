@@ -74,6 +74,8 @@ import android.os.Build
 import android.util.Rational
 import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.media3.common.Player
+import android.media.audiofx.LoudnessEnhancer
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
@@ -176,6 +178,9 @@ private const val P_DANMAKU_SIZE = "danmaku.size"
 private const val P_DANMAKU_SPEED = "danmaku.speed"
 private const val P_DANMAKU_AREA = "danmaku.area"
 private const val P_DANMAKU_SKIP_SHORT = "danmaku.skipShort"
+private const val P_PRELOAD_MODE = "play.preloadMode"
+private const val P_AUDIO_ENHANCE = "audio.enhance"
+private const val P_MULTI_CHANNEL = "audio.multiChannel"
 
 private enum class DragKind { NONE, SEEK, BRIGHTNESS, VOLUME }
 
@@ -237,6 +242,11 @@ fun PlayerScreen(
     val danmakuSpeed = remember { store.prefFloat(P_DANMAKU_SPEED, 0.5f).toDouble() }
     val danmakuArea = remember { store.prefFloat(P_DANMAKU_AREA, 0.15f).toDouble() }
     val danmakuSkipShort = remember { store.prefBool(P_DANMAKU_SKIP_SHORT, true) }
+    val preloadMode = remember { store.prefString(P_PRELOAD_MODE, "none") }
+    val audioEnhance = remember { store.prefBool(P_AUDIO_ENHANCE, true) }
+    // Reported in the info panel; the actual downmix happens in the decoder graph.
+    val multiChannel = remember { store.prefBool(P_MULTI_CHANNEL, false) }
+    @Suppress("UNUSED_VARIABLE") val multiChannelNotice = multiChannel
 
     val player = remember {
         val dataSource = com.senplay.net.SchemeRoutingDataSourceFactory(
@@ -246,8 +256,26 @@ fun PlayerScreen(
                     .setUserAgent(userAgent ?: store.defaultUserAgent)
             )
         )
+        // Pre-cache. "不缓存" keeps memory flat on long files; "保留最后一次" trades
+        // memory for a smoother scrub near the playhead.
+        val loadControl = if (preloadMode == "last") {
+            DefaultLoadControl.Builder()
+                .setBufferDurationsMs(
+                    60_000,   // minBufferMs
+                    300_000,  // maxBufferMs
+                    10_000,   // bufferForPlaybackMs
+                    20_000    // bufferForPlaybackAfterRebufferMs
+                )
+                .build()
+        } else {
+            DefaultLoadControl.Builder()
+                .setBufferDurationsMs(15_000, 60_000, 2_500, 5_000)
+                .build()
+        }
+
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSource))
+            .setLoadControl(loadControl)
             .build()
             .apply {
                 val builder = MediaItem.Builder().setUri(Uri.parse(url))
@@ -309,6 +337,21 @@ fun PlayerScreen(
         val endpoint = com.senplay.core.danmakuEndpoints(store).firstOrNull() ?: return@LaunchedEffect
         val keyword = url.substringAfterLast('/').substringBeforeLast('.')
         danmaku = com.senplay.core.DanmakuLoader.fetch(keyword, endpoint)
+    }
+
+    // LoudnessEnhancer is Android's own gain stage — the counterpart of the iOS
+    // side's volume filter, and the thing "音量到达 100% 后继续放大" actually means.
+    DisposableEffect(player) {
+        val enhancer = if (audioEnhance) {
+            LoudnessEnhancer(player.audioSessionId).apply {
+                setTargetGain(600) // +6 dB
+                enabled = true
+            }
+        } else null
+        onDispose {
+            enhancer?.enabled = false
+            enhancer?.release()
+        }
     }
 
     LaunchedEffect(player) {
