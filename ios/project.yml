@@ -38,3 +38,21 @@ targets:
         CODE_SIGNING_REQUIRED: "NO"
         CODE_SIGNING_ALLOWED: "NO"
         ENABLE_BITCODE: "NO"
+
+  SenPlayTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: SenPlayTests
+    dependencies:
+      - target: SenPlay
+    settings:
+      base:
+        # Deliberately not PRODUCT_NAME: SenPlay — sharing the name with the app
+        # makes both targets emit a module called SenPlay and the build stops with
+        # "Multiple commands produce ... SenPlay.swiftmodule".
+        PRODUCT_BUNDLE_IDENTIFIER: com.senplay.player.tests
+        GENERATE_INFOPLIST_FILE: "YES"
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGNING_ALLOWED: "NO"

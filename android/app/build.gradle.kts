@@ -81,6 +81,16 @@ android {
     }
 }
 
+// One set of fixtures, read by both platforms' tests, so "the two builds agree"
+// is something a test can check rather than something the docs assert.
+android {
+    sourceSets {
+        getByName("test") {
+            resources.srcDir("../../tests/fixtures")
+        }
+    }
+}
+
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation("androidx.compose.ui:ui")

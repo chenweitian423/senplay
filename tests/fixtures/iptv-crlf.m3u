@@ -1,0 +1,3 @@
+﻿#EXTM3U
+#EXTINF:-1 tvg-id="x" group-title="CRLF 组",CRLF 频道
+http://example.test/crlf.m3u8
