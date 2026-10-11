@@ -194,7 +194,14 @@ private fun ServerBrowserScreen(
                         if (parentId == null) client.views()
                         else client.items(parentId, sortBy = sortBy, ascending = ascending)
                     Strip.RESUME -> client.resume()
-                    Strip.LATEST -> client.latest()
+                    Strip.LATEST -> {
+                        val fetched = client.latest()
+                        if (prefs.prefBool("library.hidePlayedInLatest", false)) {
+                            fetched.filter { !it.played }
+                        } else {
+                            fetched
+                        }
+                    }
                     Strip.COLLECTIONS ->
                         if (collectionId == null) client.collections(null)
                         else client.items(collectionId!!)
@@ -654,6 +661,8 @@ private class ListDisplay(store: LibraryStore) {
     val showMediaInfo = store.prefBool("library.showMediaInfo", true)
     val titleCentered = store.prefString("library.titleAlignment", "leading") == "center"
     val showCollection = store.prefBool("library.showCollection", false)
+    /** "最新中隐藏已播放" filters inside the strip rather than hiding it. */
+    val hidePlayedInLatest = store.prefBool("library.hidePlayedInLatest", false)
     val showContinue = store.prefBool("library.showContinue", true)
 
     /**

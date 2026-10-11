@@ -44,6 +44,8 @@ private struct ListDisplay {
     var titleCentered = false
     var showContinue = true
     var showCollection = false
+    /// "最新中隐藏已播放"
+    var hidePlayedInLatest = false
 
     init(_ defaults: UserDefaults = .standard) {
         showSize = defaults.object(forKey: "pref.list.showSize") as? Bool ?? true
@@ -70,6 +72,8 @@ private struct ListDisplay {
             == "center"
         showContinue = defaults.object(forKey: "pref.library.showContinue") as? Bool ?? true
         showCollection = defaults.object(forKey: "pref.library.showCollection") as? Bool ?? false
+        hidePlayedInLatest =
+            defaults.object(forKey: "pref.library.hidePlayedInLatest") as? Bool ?? false
     }
 }
 
@@ -713,7 +717,12 @@ struct ServerBrowserView: View {
                 case .resume:
                     entries = try await client.resume()
                 case .latest:
-                    entries = try await client.latest()
+                    // "最新中隐藏已播放" filters inside the section rather than
+                    // hiding it; the reference app keeps the strip either way.
+                    let fetched = try await client.latest()
+                    entries = display.hidePlayedInLatest
+                        ? fetched.filter { !$0.isPlayed }
+                        : fetched
                 case .collections:
                     entries = try await client.collections(parentId: collectionParent)
                 }
