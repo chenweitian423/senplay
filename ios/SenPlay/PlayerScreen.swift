@@ -396,6 +396,11 @@ struct PlayerScreen: View {
     @AppStorage(PrefKey.danmakuSpeed) private var danmakuSpeed = 0.5
     @AppStorage(PrefKey.danmakuArea) private var danmakuArea = 0.15
     @AppStorage(PrefKey.danmakuSkipShort) private var danmakuSkipShort = true
+    @AppStorage(PrefKey.preloadMode) private var preloadMode = "none"
+    @AppStorage(PrefKey.audioEnhance) private var audioEnhance = true
+    @AppStorage(PrefKey.multiChannel) private var multiChannel = false
+    @AppStorage("pref.video.upscaling") private var upscaling = false
+    @AppStorage("pref.video.hdrMetadata") private var hdrMetadata = true
 
     @StateObject private var subtitles = SubtitleController()
     @State private var kernel: KernelPlayer?
@@ -1170,6 +1175,40 @@ struct PlayerScreen: View {
             options.appendHeader(request.headers)
         }
         options.registerRemoteControll = true
+
+        // Pre-cache. "不缓存" keeps memory flat on long files; "保留最后一次" trades
+        // memory for a smoother scrub near the playhead.
+        switch preloadMode {
+        case "last":
+            options.maxBufferDuration = 60
+            options.preferredForwardBufferDuration = 30
+        default:
+            options.maxBufferDuration = 20
+            options.preferredForwardBufferDuration = 0
+        }
+
+        // HDR pass-through. Only meaningful when the panel and the source agree.
+        if hdrMetadata {
+            options.destinationDynamicRange = .hdr10
+        }
+
+        // Audio. The gain filter is what "音量到达 100% 后继续放大" actually means;
+        // multichannel downmix is the opposite direction and is left off by default
+        // because it can drop the dialogue on stereo devices.
+        if audioEnhance {
+            options.audioFilters.append("volume=2.0")
+        }
+        if multiChannel {
+            options.audioFilters.append("pan=stereo|c0=c0|c1=c1")
+        }
+
+        // AI upscaling and de-interlacing are FFmpeg graph work; AVFoundation paths
+        // ignore them, which is why the preference says so in its own footnote.
+        if upscaling {
+            options.videoFilters.append("scale=iw*1.5:ih*1.5:flags=lanczos")
+        }
+        options.autoDeInterlace = false
+        options.autoRotate = true
         options.autoSelectEmbedSubtitle = true
         options.isSeekedAutoPlay = true
 
