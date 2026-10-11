@@ -262,6 +262,11 @@ final class KernelPlayer: NSObject, ObservableObject {
         }
     }
 
+    /// Chapter markers reported by the demuxer, used for the jump list.
+    func chapters() -> [Chapter] {
+        layer.player.chapters
+    }
+
     func audioTracks() -> [MediaPlayerTrack] { layer.player.tracks(mediaType: .audio) }
     func subtitleTracks() -> [MediaPlayerTrack] { layer.player.tracks(mediaType: .subtitle) }
     func videoTracks() -> [MediaPlayerTrack] { layer.player.tracks(mediaType: .video) }
@@ -856,6 +861,29 @@ struct PlayerScreen: View {
                                 }
                             }
                         case .more:
+                            let chapters = kernel?.chapters() ?? []
+                            if !chapters.isEmpty {
+                                Text("章节（\(chapters.count)）")
+                                    .font(.caption2)
+                                    .foregroundColor(.white.opacity(0.6))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 16)
+                                    .padding(.top, 8)
+                                ForEach(chapters.indices, id: \.self) { index in
+                                    let chapter = chapters[index]
+                                    trackButton(
+                                        TrackRow(id: index,
+                                                 title: chapter.title.isEmpty ? "第 \(index + 1) 章" : chapter.title,
+                                                 subtitle: timecode(chapter.start),
+                                                 selected: currentTime >= chapter.start && currentTime < chapter.end,
+                                                 name: chapter.title)
+                                    ) {
+                                        kernel?.seek(to: chapter.start)
+                                        currentTime = chapter.start
+                                        activePanel = nil
+                                    }
+                                }
+                            }
                             outputRow(title: "画中画",
                                       detail: kernel?.isPictureInPictureActive == true ? "进行中" : "关闭",
                                       active: kernel?.isPictureInPictureActive == true) {
