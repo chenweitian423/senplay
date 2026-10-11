@@ -28,6 +28,10 @@ ANDROID_SETTINGS_UI = {"SettingsScreen.kt"}
 IOS_DECL = re.compile(r'static let (\w+) = "([^"]+)"')
 # @AppStorage("pref.x") names a key inline rather than through PrefKey.
 IOS_LITERAL = re.compile(r'@AppStorage\("([^"]+)"\)')
+# UserDefaults read directly rather than through a property wrapper. The browser
+# reads its display flags this way, and missing the pattern made keys that are
+# plainly wired look untouched.
+IOS_DIRECT = re.compile(r'(?:object|string|bool|integer|double|array|data)\(forKey:\s*"([^"]+)"\)')
 ANDROID_DECL = re.compile(r'private const val (P_\w+) = "([^"]+)"')
 # A key can also be named inline at the call site, with no constant at all. Missing
 # these made the audit report three times that fewer keys were dead than really were.
@@ -46,6 +50,13 @@ def scan(sources: list[pathlib.Path], decl_re: re.Pattern, settings_ui: set[str]
                 name_to_key.setdefault(name, key)
                 declarations.setdefault(key, path.name)
 
+    # Keys are stored in their normalised form — "pref.x" — because that is what the
+    # iOS side produces and what the two are compared on. Keeping the raw constant
+    # text here meant every Android key failed to match its iOS counterpart, so the
+    # report marked every row as Android-only regardless of what was wired.
+    def normalised(key: str) -> str:
+        return key if key.startswith("pref.") else "pref." + key
+
     live: dict[str, set[str]] = {}
     for path in sources:
         if path.name in settings_ui:
@@ -53,7 +64,10 @@ def scan(sources: list[pathlib.Path], decl_re: re.Pattern, settings_ui: set[str]
         # An @AppStorage literal outside the settings screen is a read: the property
         # wrapper fetches the value from UserDefaults wherever it is used. Treating it
         # as only a declaration made the report claim keys were dead that were wired.
-        for key in IOS_LITERAL.findall(path.read_text(encoding="utf-8")):
+        text = path.read_text(encoding="utf-8")
+        for key in IOS_LITERAL.findall(text):
+            live.setdefault(key, set()).add(path.name)
+        for key in IOS_DIRECT.findall(text):
             live.setdefault(key, set()).add(path.name)
         for line in path.read_text(encoding="utf-8").splitlines():
             stripped = line.strip()
@@ -66,7 +80,7 @@ def scan(sources: list[pathlib.Path], decl_re: re.Pattern, settings_ui: set[str]
                 continue
             for name, key in name_to_key.items():
                 if re.search(r"\b" + re.escape(name) + r"\b", line):
-                    live.setdefault(key, set()).add(path.name)
+                    live.setdefault(normalised(key), set()).add(path.name)
     return live
 
 
@@ -97,19 +111,24 @@ def android_live() -> dict[str, set[str]]:
 
 def main() -> int:
     ios_sources = sorted((ROOT / "ios" / "SenPlay").glob("*.swift"))
-    ios = scan(ios_sources, IOS_DECL, IOS_SETTINGS_UI)
-    # @AppStorage literals are bound in place; if that binding is the only mention,
-    # the value is displayed and never acted on either.
-    for path in ios_sources:
-        if path.name in IOS_SETTINGS_UI:
-            continue
-    android = android_live()
+    ios_live = scan(ios_sources, IOS_DECL, IOS_SETTINGS_UI)
 
-    # Inline-bound keys on the settings surface still count as declared.
+    # Every key the settings screen offers, whether it names one through PrefKey or
+    # as an @AppStorage literal. Without this the iOS side contributes nothing to the
+    # report and every row comes out marked "android", which is how a whole column of
+    # missing keys went unnoticed for several rounds.
+    ios_declared: set[str] = set()
     for path in ios_sources:
+        text = path.read_text(encoding="utf-8")
+        for _, key in IOS_DECL.findall(text):
+            ios_declared.add(key)
         if path.name in IOS_SETTINGS_UI:
-            for key in IOS_LITERAL.findall(path.read_text(encoding="utf-8")):
-                ios.setdefault(key, set())
+            ios_declared |= set(IOS_LITERAL.findall(text))
+            ios_declared |= set(IOS_DIRECT.findall(text))
+    # A key declared but never read needs an entry on both sides to be compared.
+    ios = {key: ios_live.get(key, set()) for key in ios_declared | set(ios_live)}
+
+    android = android_live()
 
     all_keys = sorted(set(ios) | set(android))
     dead = [k for k in all_keys if not ios.get(k) and not android.get(k)]
