@@ -69,6 +69,10 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import android.app.PictureInPictureParams
+import android.os.Build
+import android.util.Rational
+import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -200,6 +204,7 @@ fun PlayerScreen(
     var didSkipIntro by remember { mutableStateOf(false) }
     var didSkipOutro by remember { mutableStateOf(false) }
     var upNext by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var inPip by remember { mutableStateOf(activity?.isInPictureInPictureMode == true) }
     var countdown by remember { mutableStateOf(0) }
 
     val autoHideSeconds = remember { store.prefInt(P_HIDE_AFTER, 3) }
@@ -329,6 +334,19 @@ fun PlayerScreen(
             }
             SchemeRouter.dispatchCallback(context, sourceUri ?: Uri.EMPTY, url, player.currentPosition / 1000)
             player.release()
+        }
+    }
+
+    fun enterPip() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            activity?.enterPictureInPictureMode(
+                PictureInPictureParams.Builder()
+                    .setAspectRatio(Rational(16, 9))
+                    .build()
+            )
+            inPip = true
+        } else {
+            showHud("此系统不支持画中画")
         }
     }
 
@@ -605,6 +623,9 @@ fun PlayerScreen(
                         }
                         IconButton(onClick = { showHud("音量 ${(player.volume * 100).toInt()}%") }) {
                             Icon(Icons.Filled.VolumeUp, contentDescription = "音量", tint = Color.White)
+                        }
+                        IconButton(onClick = { enterPip() }) {
+                            Icon(Icons.Filled.PictureInPictureAlt, contentDescription = "画中画", tint = Color.White)
                         }
                     }
                 }

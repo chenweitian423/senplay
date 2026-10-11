@@ -238,6 +238,22 @@ final class KernelPlayer: NSObject, ObservableObject {
     func setRate(_ rate: Float) { layer.player.playbackRate = rate }
     func setVolume(_ volume: Float) { layer.player.playbackVolume = volume }
     func setMuted(_ muted: Bool) { layer.player.isMuted = muted }
+    /// Video out to another screen; the session keeps running on the receiver.
+    func setExternalPlayback(_ on: Bool) {
+        layer.player.allowsExternalPlayback = on
+        layer.player.usesExternalPlaybackWhileExternalScreenIsActive = on
+    }
+
+    var isExternalPlaybackActive: Bool { layer.player.isExternalPlaybackActive }
+
+    /// KSPlayerLayer already owns the PiP lifecycle, so flipping the flag is the
+    /// whole integration.
+    func setPictureInPicture(_ on: Bool) {
+        layer.isPipActive = on
+    }
+
+    var isPictureInPictureActive: Bool { layer.isPipActive }
+
     func setAspect(_ mode: AspectMode) {
         switch mode {
         case .fit: layer.player.contentMode = .scaleAspectFit
@@ -820,6 +836,21 @@ struct PlayerScreen: View {
                                 }
                             }
                         case .more:
+                            outputRow(title: "画中画",
+                                      detail: kernel?.isPictureInPictureActive == true ? "进行中" : "关闭",
+                                      active: kernel?.isPictureInPictureActive == true) {
+                                let next = !(kernel?.isPictureInPictureActive ?? false)
+                                kernel?.setPictureInPicture(next)
+                                toast = next ? "已进入画中画" : "已退出画中画"
+                                scheduleToastClear()
+                            }
+                            outputRow(title: "投屏",
+                                      detail: kernel?.isExternalPlaybackActive == true ? "已连接" : "未连接",
+                                      active: kernel?.isExternalPlaybackActive == true) {
+                                kernel?.setExternalPlayback(true)
+                                toast = "已开启外部播放，请在控制中心选择设备"
+                                scheduleToastClear()
+                            }
                             ForEach(infoRows().indices, id: \.self) { index in
                                 let line = infoRows()[index]
                                 HStack {
@@ -840,6 +871,25 @@ struct PlayerScreen: View {
             .cornerRadius(14)
             .padding(.horizontal, 28)
         }
+    }
+
+    private func outputRow(title: String, detail: String, active: Bool,
+                           action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).foregroundColor(.white).font(.subheadline)
+                    Text(detail).foregroundColor(.white.opacity(0.6)).font(.caption2)
+                }
+                Spacer()
+                Image(systemName: active ? "checkmark" : "chevron.right")
+                    .foregroundColor(active ? .accentColor : .white.opacity(0.5))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func trackButton(_ row: TrackRow, action: @escaping () -> Void) -> some View {
@@ -1103,6 +1153,7 @@ struct PlayerScreen: View {
         options.isSeekedAutoPlay = true
 
         let player = KernelPlayer(url: url, options: options)
+        player.setExternalPlayback(true)
         player.onTime = { [self] current, total in
             if !scrubbing { currentTime = current }
             subtitles.tick(at: current)
