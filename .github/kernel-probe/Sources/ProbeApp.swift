@@ -12,9 +12,9 @@ struct KernelProbeApp: App {
             VStack(spacing: 10) {
                 Text("KSPlayer kernel probe").font(.headline)
                 Text(String(describing: KSOptions.self))
-                    .font(.footnote).monospaced()
+                    .font(.system(.footnote, design: .monospaced))
                 Text(String(describing: KSPlayerLayer.self))
-                    .font(.footnote).monospaced()
+                    .font(.system(.footnote, design: .monospaced))
             }
             .padding()
         }
