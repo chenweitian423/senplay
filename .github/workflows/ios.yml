@@ -57,7 +57,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ios-v${{ github.run_number }}
-          name: SenPlay iOS unsigned ${{ github.run_number }}
+          tag_name: ios-unsigned
+          name: SenPlay iOS unsigned IPA
           body: "未签名 IPA，需要用 AltStore / Sideloadly / TrollScope 自行签名后安装。"
           files: ios/artifacts/*
