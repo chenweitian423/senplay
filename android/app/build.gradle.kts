@@ -102,6 +102,7 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("eu.agno3.jcifs:jcifs-ng:2.1.10")
     implementation("commons-net:commons-net:3.11.1")
+    implementation("com.github.mwiede:jsch:0.2.20")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")

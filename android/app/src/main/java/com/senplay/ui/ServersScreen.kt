@@ -61,11 +61,13 @@ import com.senplay.net.PlexClient
 import com.senplay.net.SmbTarget
 import com.senplay.net.WebDavClient
 import com.senplay.net.listFtpDirectory
+import com.senplay.net.listSftpDirectory
 import com.senplay.net.listSmbDirectory
 import kotlinx.coroutines.launch
 import java.util.UUID
 
-private val SERVER_TYPES = listOf("webdav", "emby", "jellyfin", "feiniu", "plex", "smb", "ftp")
+private val SERVER_TYPES =
+    listOf("webdav", "emby", "jellyfin", "feiniu", "plex", "smb", "ftp", "sftp")
 
 @Composable
 fun ServersScreen(store: LibraryStore, onPlay: (PlayRequest) -> Unit) {
@@ -223,6 +225,18 @@ private fun ServerBrowserScreen(
                         imageUrl = client.artworkUrl(item)
                     )
                 }
+            } else if (server.type == "sftp") {
+                val authority = server.address
+                    .removePrefix("sftp://").removePrefix("SFTP://")
+                    .substringBefore('/')
+                listSftpDirectory(server, path).map { entry ->
+                    MediaEntry(
+                        name = entry.name,
+                        url = "sftp://$authority${entry.url}",
+                        isDirectory = entry.isDirectory,
+                        size = entry.size
+                    )
+                }
             } else if (server.type == "ftp") {
                 listFtpDirectory(server, path).map { entry ->
                     MediaEntry(
@@ -369,6 +383,7 @@ private fun ServerBrowserScreen(
                 path = when (server.type) {
                     "smb" -> entry.url.substringAfter("smb://").substringAfter('/', "")
                     "ftp" -> entry.url.substringAfter("ftp://").substringAfter('/', "/")
+                    "sftp" -> entry.url.substringAfter("sftp://").substringAfter('/', "/")
                     else -> entry.url
                 }
             } else {
