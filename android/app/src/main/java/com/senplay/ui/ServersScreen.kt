@@ -612,7 +612,7 @@ private class ListDisplay(store: LibraryStore) {
     /** "菜单顶部显示完整名称" — off by default. */
     val fullNameOnMenu = store.prefBool("list.fullNameOnMenu", false)
     /** "文件夹项目显示时间" */
-    val showFolderTime = store.prefBool("list.showFolderTime", true)
+    val showFolderTime = store.prefBool("list.showFolderTime", false)
     /** "显示剩余播放数量" — a count of remaining items, not a duration. */
     val showRemainingCount = store.prefBool("library.showRemaining", true)
     /** "显示选集指示器" */

@@ -26,6 +26,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Preference defaults
+        run: python3 tools/check-defaults.py
+
       - name: Preference keys agree across platforms
         run: python3 tools/check-prefs.py
 

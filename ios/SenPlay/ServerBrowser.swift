@@ -54,7 +54,7 @@ private struct ListDisplay {
         showPlayedMark = defaults.object(forKey: "pref.library.showPlayedMark") as? Bool ?? true
         showRating = defaults.object(forKey: "pref.library.showRating") as? Bool ?? true
         showMediaInfo = defaults.object(forKey: "pref.library.showMediaInfo") as? Bool ?? true
-        titleCentered = (defaults.string(forKey: "pref.library.titleAlignment") ?? "leading")
+        titleCentered = (defaults.string(forKey: "pref.library.titleAlignment") ?? "left")
             == "center"
         showContinue = defaults.object(forKey: "pref.library.showContinue") as? Bool ?? true
         showCollection = defaults.object(forKey: "pref.library.showCollection") as? Bool ?? false

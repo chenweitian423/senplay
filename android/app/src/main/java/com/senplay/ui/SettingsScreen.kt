@@ -83,7 +83,7 @@ fun SettingsScreen(store: LibraryStore) {
         PrefSwitch(store, "list.showFrameRate", "帧率", null, true)
         PrefSwitch(store, "list.showResolution", "分辨率", null, true)
         PrefSwitch(store, "list.simplifyResolution", "分辨率简化显示", null, true)
-        PrefSwitch(store, "list.fullNameOnMenu", "菜单中显示完整名称", null, true)
+        PrefSwitch(store, "list.fullNameOnMenu", "菜单中显示完整名称", null, false)
         PrefChoice(
             store, "list.previewPosition", "预览图位置",
             listOf("left" to "左边", "right" to "右边"), "right"
