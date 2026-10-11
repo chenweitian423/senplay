@@ -174,42 +174,93 @@ class EmbyClient(private val server: ServerConfig) {
             val items = JSONObject(response.body?.string().orEmpty()).optJSONArray("Items")
                 ?: return emptyList()
             return (0 until items.length()).mapNotNull { index ->
-                val item = items.optJSONObject(index) ?: return@mapNotNull null
-                val id = item.optString("Id")
-                if (id.isBlank()) return@mapNotNull null
-                val type = item.optString("Type")
-                val folderLike = type == "Folder" || type == "Series" || type == "Season" ||
-                    type == "CollectionFolder" || type == "UserView" || type == "BoxSet"
-                val userData = item.optJSONObject("UserData")
-                MediaEntry(
-                    name = item.optString("Name", id),
-                    url = id,
-                    isDirectory = folderLike,
-                    entryId = id,
-                    unplayedCount = userData?.optInt("UnplayedItemCount") ?: 0,
-                    episodeNumber = item.optInt("IndexNumber"),
-                    cast = castOf(item),
-                    width = videoStream(item)?.optInt("Width") ?: 0,
-                    height = videoStream(item)?.optInt("Height") ?: 0,
-                    frameRate = videoStream(item)?.let {
-                        val real = it.optDouble("RealFrameRate", 0.0)
-                        if (real > 0) real else it.optDouble("AverageFrameRate", 0.0)
-                    } ?: 0.0,
-                    videoRange = videoStream(item)?.optString("VideoRange").orEmpty(),
-                    modifiedAt = dateMillis(item.optString("DateModified")),
-                    durationTicks = item.optLong("RunTimeTicks"),
-                    played = userData?.optBoolean("Played") ?: false,
-                    positionMs = (userData?.optLong("PlaybackPositionTicks") ?: 0L) / 10_000L,
-                    overview = item.optString("Overview").ifBlank { null },
-                    year = item.optInt("ProductionYear").takeIf { it > 0 },
-                    rating = item.optDouble("CommunityRating").takeIf { it > 0 },
-                    imageUrl = Urls.join(
-                        server.address,
-                        "/Items/$id/Images/Primary?maxHeight=400&api_key=$accessToken"
-                    )
-                )
+                items.optJSONObject(index)?.let { toEntry(it) }
             }
         }
+    }
+
+    /** One item's full record, for the detail page. */
+    suspend fun item(id: String): MediaEntry? = io {
+        val url = Urls.join(server.address, "/Users/$userId/Items/$id")
+            .toHttpUrl()
+            .newBuilder()
+            .addQueryParameter(
+                "Fields",
+                "Path,MediaSources,RunTimeTicks,Overview,ProductionYear,CommunityRating,UserData,DateModified,People,Genres,Studios,Tags"
+            )
+            .addQueryParameter("api_key", accessToken)
+            .build()
+        val request = Request.Builder()
+            .url(url)
+            .header("X-Emby-Authorization", authHeader)
+            .build()
+        Http.client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return@io null
+            val body = response.body?.string().orEmpty()
+            if (body.isBlank()) return@io null
+            toEntry(org.json.JSONObject(body))
+        }
+    }
+
+    /**
+     * "显示类似作品". Emby's own similarity, which weights genre, people and tags —
+     * reproducing that ranking locally would be inventing a ranking and calling it
+     * the same thing.
+     */
+    suspend fun similar(id: String, limit: Int = 12): List<MediaEntry> = io {
+        val url = Urls.join(server.address, "/Items/$id/Similar")
+            .toHttpUrl()
+            .newBuilder()
+            .addQueryParameter("UserId", userId)
+            .addQueryParameter("Limit", limit.toString())
+            .addQueryParameter(
+                "Fields",
+                "Path,MediaSources,RunTimeTicks,Overview,ProductionYear,CommunityRating,UserData"
+            )
+            .addQueryParameter("api_key", accessToken)
+            .build()
+        fetchItems(url)
+    }
+
+    /**
+     * Shared by the list endpoints and the single-item endpoint: the same fields are
+     * assembled the same way, and the detail page would otherwise be a second copy of
+     * this that drifts from the first.
+     */
+    private fun toEntry(item: org.json.JSONObject): MediaEntry? {
+        val id = item.optString("Id")
+        if (id.isBlank()) return null
+        val type = item.optString("Type")
+        val folderLike = type == "Folder" || type == "Series" || type == "Season" ||
+            type == "CollectionFolder" || type == "UserView" || type == "BoxSet"
+        val userData = item.optJSONObject("UserData")
+        return MediaEntry(
+            name = item.optString("Name", id),
+            url = id,
+            isDirectory = folderLike,
+            entryId = id,
+            unplayedCount = userData?.optInt("UnplayedItemCount") ?: 0,
+            episodeNumber = item.optInt("IndexNumber"),
+            cast = castOf(item),
+            width = videoStream(item)?.optInt("Width") ?: 0,
+            height = videoStream(item)?.optInt("Height") ?: 0,
+            frameRate = videoStream(item)?.let {
+                val real = it.optDouble("RealFrameRate", 0.0)
+                if (real > 0) real else it.optDouble("AverageFrameRate", 0.0)
+            } ?: 0.0,
+            videoRange = videoStream(item)?.optString("VideoRange").orEmpty(),
+            modifiedAt = dateMillis(item.optString("DateModified")),
+            durationTicks = item.optLong("RunTimeTicks"),
+            played = userData?.optBoolean("Played") ?: false,
+            positionMs = (userData?.optLong("PlaybackPositionTicks") ?: 0L) / 10_000L,
+            overview = item.optString("Overview").ifBlank { null },
+            year = item.optInt("ProductionYear").takeIf { it > 0 },
+            rating = item.optDouble("CommunityRating").takeIf { it > 0 },
+            imageUrl = Urls.join(
+                server.address,
+                "/Items/$id/Images/Primary?maxHeight=400&api_key=$accessToken"
+            )
+        )
     }
 
     fun streamUrl(entry: MediaEntry): String =

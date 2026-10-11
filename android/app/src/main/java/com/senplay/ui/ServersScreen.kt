@@ -178,6 +178,10 @@ private fun ServerBrowserScreen(
     var collectionId by remember { mutableStateOf<String?>(null) }
 
     var strip by remember { mutableStateOf(Strip.FILES) }
+    var detailEntry by remember { mutableStateOf<MediaEntry?>(null) }
+    // Set only for the synchronous span of a call from the detail page's own play
+    // button, so open() plays instead of reopening the page that just asked.
+    var fromDetail by remember { mutableStateOf(false) }
     var sortBy by remember { mutableStateOf(EmbyClient.SortBy.NAME) }
     var ascending by remember { mutableStateOf(true) }
     var grid by remember { mutableStateOf(true) }
@@ -449,6 +453,10 @@ private fun ServerBrowserScreen(
                     "sftp" -> entry.url.substringAfter("sftp://").substringAfter('/', "/")
                     else -> entry.url
                 }
+            } else if (server.isEmbyLike && strip == Strip.FILES && emby != null && !fromDetail) {
+                // Emby items open a detail page; everything else plays directly,
+                // because a plain file on a share has nothing to show a page about.
+                detailEntry = entry
             } else {
                 val subtitle = matchSubtitle(entry)
                 val request = if (server.type == "s3") {
@@ -498,7 +506,25 @@ private fun ServerBrowserScreen(
             @Suppress("UNUSED_EXPRESSION") navigable
         }
 
-        val displayContext = LocalContext.current
+        detailEntry?.let { item ->
+        val detailClient = emby
+        if (detailClient != null) {
+            ItemDetailScreen(
+                entry = item,
+                client = detailClient,
+                prefs = prefs,
+                onPlay = { chosen ->
+                    detailEntry = null
+                    fromDetail = true
+                    open(chosen)
+                    fromDetail = false
+                },
+                onBack = { detailEntry = null }
+            )
+        }
+    }
+
+    val displayContext = LocalContext.current
     val display = remember(displayContext) {
         ListDisplay(LibraryStore.get(displayContext))
     }
