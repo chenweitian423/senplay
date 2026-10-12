@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Tv
@@ -11,6 +12,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -51,11 +53,9 @@ fun HomeScreen(store: LibraryStore) {
     /** "显示记录模块" — the index stays at 3 so the other tabs keep their tags; only
      * the item and, below, its screen are skipped. */
     val showRecordModule = remember { store.prefBool("ui.showRecordModule", true) }
-    val recordTab = 3
+    val recordTab = 1
     val tabs = listOf(
         Tab("媒体库", Icons.Filled.VideoLibrary),
-        Tab("服务器", Icons.Filled.Dns),
-        Tab("IPTV", Icons.Filled.Tv),
         Tab("记录", Icons.Filled.History),
         Tab("设置", Icons.Filled.Settings)
     )
@@ -65,8 +65,29 @@ fun HomeScreen(store: LibraryStore) {
         if (!showRecordModule && tab == recordTab) tab = 0
     }
 
+    var nested by remember { mutableStateOf<String?>(null) }
+
     Scaffold(
-        topBar = { TopAppBar(title = { Text(tabs[tab].label) }) },
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        when (nested) {
+                            "servers" -> "服务器"
+                            "iptv" -> "IPTV"
+                            else -> tabs[tab].label
+                        }
+                    )
+                },
+                navigationIcon = {
+                    if (nested != null) {
+                        IconButton(onClick = { nested = null }) {
+                            Icon(Icons.Filled.ArrowBack, contentDescription = "返回")
+                        }
+                    }
+                }
+            )
+        },
         bottomBar = {
             NavigationBar {
                 tabs.forEachIndexed { index, item ->
@@ -82,11 +103,13 @@ fun HomeScreen(store: LibraryStore) {
         }
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            when (tab) {
-                0 -> LibraryScreen(store) { PlayerLauncher.start(context, it) }
-                1 -> ServersScreen(store) { PlayerLauncher.start(context, it) }
-                2 -> IPTVScreen(store) { PlayerLauncher.start(context, it) }
-                3 -> HistoryScreen(store) { PlayerLauncher.start(context, it) }
+            // Servers and IPTV are reached from inside the library now, so the tab
+            // number alone no longer decides what is on screen.
+            when {
+                nested == "servers" -> ServersScreen(store) { PlayerLauncher.start(context, it) }
+                nested == "iptv" -> IPTVScreen(store) { PlayerLauncher.start(context, it) }
+                tab == 0 -> LibraryScreen(store, { PlayerLauncher.start(context, it) }) { nested = it }
+                tab == recordTab -> HistoryScreen(store) { PlayerLauncher.start(context, it) }
                 else -> SettingsScreen(store)
             }
         }

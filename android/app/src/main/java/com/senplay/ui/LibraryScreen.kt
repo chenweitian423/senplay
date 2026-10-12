@@ -17,10 +17,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Dns
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
@@ -49,7 +52,12 @@ import kotlinx.coroutines.withContext
 data class LocalMedia(val name: String, val uri: String, val durationMs: Long, val sizeBytes: Long)
 
 @Composable
-fun LibraryScreen(store: LibraryStore, onPlay: (PlayRequest) -> Unit) {
+fun LibraryScreen(
+    store: LibraryStore,
+    onPlay: (PlayRequest) -> Unit,
+    /** Servers and IPTV live here rather than in the bottom bar, as the reference has them. */
+    onOpen: (String) -> Unit = {}
+) {
     val context = LocalContext.current
     var localMedia by remember { mutableStateOf<List<LocalMedia>>(emptyList()) }
     var urlList by remember { mutableStateOf(store.urlList()) }
@@ -64,6 +72,23 @@ fun LibraryScreen(store: LibraryStore, onPlay: (PlayRequest) -> Unit) {
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
+        // The reference files servers and IPTV inside the library rather than in the
+        // bottom bar. As entries here they keep the servers screen's whole add /
+        // delete / discover flow, which spreading it across a toolbar would scatter.
+        ListItem(
+            headlineContent = { Text("服务器") },
+            supportingContent = { Text("WebDAV / Emby / Jellyfin / Plex / FTP / S3") },
+            leadingContent = { Icon(Icons.Filled.Dns, contentDescription = null) },
+            modifier = Modifier.clickable { onOpen("servers") }
+        )
+        ListItem(
+            headlineContent = { Text("IPTV") },
+            supportingContent = { Text("M3U 播放列表与频道") },
+            leadingContent = { Icon(Icons.Filled.Tv, contentDescription = null) },
+            modifier = Modifier.clickable { onOpen("iptv") }
+        )
+        HorizontalDivider()
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()

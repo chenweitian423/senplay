@@ -197,8 +197,21 @@ struct IPTVScreen: View {
     @State private var search = ""
     @State private var refreshing = false
 
+    /// False when the library presents this screen inside its own navigation stack.
+    /// An inner NavigationView there would nest a second container and swallow the
+    /// pushes meant for the outer one — tapping a server would go nowhere visible.
+    var standalone = true
+
     var body: some View {
-        NavigationView {
+        if standalone {
+            NavigationView { content }
+                .navigationViewStyle(.stack)
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
             List {
                 if let error = store.lastError {
                     Text("错误：\(error)").font(.footnote).foregroundColor(.red)
@@ -313,8 +326,6 @@ struct IPTVScreen: View {
                     }
                 }
             }
-        }
-        .navigationViewStyle(.stack)
     }
 
     private func filteredChannels() -> [IPTVChannel] {

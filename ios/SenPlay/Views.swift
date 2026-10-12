@@ -19,11 +19,12 @@ struct HomeView: View {
 
     /// The reference app's module names, mapped onto this app's five tabs. "文件" is
     /// the local library, which is tab 0 here.
+    /// Servers and IPTV are no longer tabs of their own — they live inside the
+    /// library — so a stored default naming one of them opens the library rather
+    /// than a tab that no longer exists.
     private static func tabIndex(_ module: String) -> Int {
         switch module {
-        case "servers": return 1
-        case "iptv": return 2
-        case "record": return 3
+        case "record": return 1
         default: return 0
         }
     }
@@ -46,27 +47,19 @@ struct HomeView: View {
                 .tabItem { Label("媒体库", systemImage: "film.stack") }
                 .tag(0)
 
-            ServersView(store: store, pending: $pending)
-                .tabItem { Label("服务器", systemImage: "server.rack") }
-                .tag(1)
-
-            IPTVScreen(pending: $pending)
-                .tabItem { Label("IPTV", systemImage: "tv") }
-                .tag(2)
-
             if showRecordModule {
                 HistoryView(store: store, pending: $pending)
                     .tabItem { Label("记录", systemImage: "clock.arrow.circlepath") }
-                    .tag(3)
+                    .tag(1)
             }
 
             PreferencesView()
                 .tabItem { Label("设置", systemImage: "gearshape") }
-                .tag(4)
+                .tag(2)
         }
         .tint(accent)
         .onChange(of: showRecordModule) { shown in
-            if !shown, selection == 3 { selection = 0 }
+            if !shown, selection == 1 { selection = 0 }
         }
     }
 }
@@ -151,6 +144,23 @@ struct LibraryView: View {
     var body: some View {
         NavigationView {
             List {
+                // The reference files servers and IPTV inside the library rather than
+                // as top-level tabs. Keeping them as sub-pages preserves the whole
+                // add / delete / discover flow the servers screen carries, which
+                // spreading it across a toolbar would scatter.
+                Section(header: Text("资源")) {
+                    NavigationLink {
+                        ServersView(store: store, pending: $pending, standalone: false)
+                    } label: {
+                        Label("服务器", systemImage: "server.rack")
+                    }
+                    NavigationLink {
+                        IPTVScreen(pending: $pending, standalone: false)
+                    } label: {
+                        Label("IPTV", systemImage: "tv")
+                    }
+                }
+
                 Section(header: Text("URL 列表")) {
                     if store.urlList.isEmpty {
                         Text("还没有条目。可以手动添加，或用 senplay:// 链接导入。")
@@ -314,8 +324,21 @@ struct ServersView: View {
         }
     }
 
+    /// False when the library presents this screen inside its own navigation stack.
+    /// An inner NavigationView there would nest a second container and swallow the
+    /// pushes meant for the outer one — tapping a server would go nowhere visible.
+    var standalone = true
+
     var body: some View {
-        NavigationView {
+        if standalone {
+            NavigationView { content }
+                .navigationViewStyle(.stack)
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
             List {
                 Section(header: Text("媒体服务器")) {
                     if store.servers.isEmpty {
@@ -399,8 +422,6 @@ struct ServersView: View {
                     }
                 }
             }
-        }
-        .navigationViewStyle(.stack)
     }
 }
 
