@@ -7,6 +7,18 @@ struct SenPlayApp: App {
     @State private var pending: PlayRequest?
     @State private var callbackSource: URL?
 
+    init() {
+        #if DEBUG
+        // A URL handed in through the environment, so a playback path can be driven
+        // from the command line — the simulator has no window to tap on here. Debug
+        // builds only: nothing in a release build reads this.
+        if let raw = ProcessInfo.processInfo.environment["SENPLAY_AUTOPLAY"],
+           let url = URL(string: raw) {
+            _pending = State(initialValue: PlayRequest(url: raw, name: url.lastPathComponent))
+        }
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup {
             HomeView(store: store, pending: $pending)

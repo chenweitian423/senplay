@@ -1743,6 +1743,12 @@ struct PlayerScreen: View {
         guard let url = URL(string: request.url) else { return }
 
         let options = KSOptions()
+        // KSPlayer picks a kernel per URL: it starts with AVPlayer and drops to the
+        // FFmpeg one only when AVPlayer refuses outright. On a device AVPlayer will
+        // accept an MKV and then report no duration, no frame rate and no bitrate, and
+        // it cannot draw ASS subtitles at all — which is most of what this app plays.
+        // The kernel is chosen here rather than guessed at from the URL.
+        KSOptions.firstPlayerType = KSMEPlayer.self
         options.isAccurateSeek = accurateSeek
         options.hardwareDecode = preferHardwareDecode
         // "软件解码线程" — only the FFmpeg path has threads to set. AVFoundation decodes
