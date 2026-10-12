@@ -211,6 +211,10 @@ final class KernelPlayer: NSObject, ObservableObject {
     /// Set from the player screen before the layer starts.
     var preferredAudioLanguage = ""
     var preferredSubtitleLanguage = ""
+    /// "记住所选字幕/音轨": the track names this file was left on, filled in by the
+    /// screen before playback starts.
+    var rememberedAudioTrack: String?
+    var rememberedSubtitleTrack: String?
     private var languagesApplied = false
     @Published var currentTime: TimeInterval = 0
     @Published var totalTime: TimeInterval = 0
@@ -318,6 +322,23 @@ final class KernelPlayer: NSObject, ObservableObject {
         return tracks.first { ($0.languageCode ?? "").lowercased().hasPrefix(wanted) }
     }
 
+    /// Re-selects the tracks this file was left on. Returns the kinds it actually
+    /// restored, so the language preference only fills in the ones it did not.
+    private func applyRememberedTracks() -> Set<String> {
+        var restored: Set<String> = []
+        if let name = rememberedAudioTrack,
+           let track = audioTracks().first(where: { $0.name == name }) {
+            select(track)
+            restored.insert("audio")
+        }
+        if let name = rememberedSubtitleTrack,
+           let track = subtitleTracks().first(where: { $0.name == name }) {
+            select(track)
+            restored.insert("subtitle")
+        }
+        return restored
+    }
+
     func rateOptions() -> [Float] { [0.5, 0.75, 1, 1.25, 1.5, 2, 3] }
 
     func capture() -> UIImage? {
@@ -342,8 +363,12 @@ extension KernelPlayer: KSPlayerLayerDelegate {
         // second application would undo that.
         if state == .readyToPlay, !languagesApplied {
             languagesApplied = true
-            applyPreferredLanguages(audio: preferredAudioLanguage,
-                                    subtitle: preferredSubtitleLanguage)
+            // "记住所选字幕/音轨" wins over the language preference: the language is the
+            // default for a file nobody has touched, the memory is what was chosen the
+            // last time this file was open.
+            let remembered = applyRememberedTracks()
+            applyPreferredLanguages(audio: remembered.contains("audio") ? "" : preferredAudioLanguage,
+                                    subtitle: remembered.contains("subtitle") ? "" : preferredSubtitleLanguage)
         }
         if state == .bufferFinished || state == .buffering {
             mediaTitle = layer.player.dynamicInfo?.metadata["title"]
@@ -1219,6 +1244,9 @@ struct PlayerScreen: View {
         guard let kernel else { return }
         if let track = kernel.audioTracks().first(where: { $0.name == name }) {
             kernel.select(track)
+            if rememberAudioTrack {
+                LibraryStore.shared.rememberTrack(url: request.url, kind: "audio", value: name)
+            }
             toast = "已切换音轨：\(name)"
             scheduleToastClear()
         }
@@ -1229,10 +1257,22 @@ struct PlayerScreen: View {
         guard let kernel else { return }
         if let track = kernel.subtitleTracks().first(where: { $0.name == name }) {
             kernel.select(track)
+            if rememberSubtitleTrack {
+                LibraryStore.shared.rememberTrack(url: request.url, kind: "subtitle", value: name)
+            }
             toast = "已切换字幕：\(name)"
             scheduleToastClear()
         }
         activePanel = nil
+    }
+
+    /// Re-selects the tracks this file was left on.
+    private func loadRememberedTracks(into player: KernelPlayer) {
+        let store = LibraryStore.shared
+        player.rememberedAudioTrack =
+            rememberAudioTrack ? store.rememberedTrack(url: request.url, kind: "audio") : nil
+        player.rememberedSubtitleTrack =
+            rememberSubtitleTrack ? store.rememberedTrack(url: request.url, kind: "subtitle") : nil
     }
 
     private func infoRows() -> [(String, String)] {
@@ -1533,6 +1573,7 @@ struct PlayerScreen: View {
         let player = KernelPlayer(url: url, options: options)
         player.preferredAudioLanguage = preferredAudioLanguage
         player.preferredSubtitleLanguage = preferredSubtitleLanguage
+        loadRememberedTracks(into: player)
         player.setExternalPlayback(true)
         player.onTime = { [self] current, total in
             if !scrubbing { currentTime = current }

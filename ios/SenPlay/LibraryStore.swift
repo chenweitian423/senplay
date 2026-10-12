@@ -19,6 +19,8 @@ final class LibraryStore: ObservableObject {
         didSet { defaults.set(defaultUserAgent, forKey: Keys.userAgent) }
     }
 
+    private var trackMemory: [String: [String: String]] = [:]
+
     private let defaults = UserDefaults.standard
 
     private enum Keys {
@@ -27,6 +29,7 @@ final class LibraryStore: ObservableObject {
         static let history = "history.v1"
         static let remember = "remember_progress"
         static let userAgent = "default_user_agent"
+        static let tracks = "trackMemory.v1"
     }
 
     private init() {
@@ -36,6 +39,8 @@ final class LibraryStore: ObservableObject {
         urlList = LibraryStore.decode([UrlListItem].self, from: defaults.data(forKey: Keys.urls)) ?? []
         history = (LibraryStore.decode([HistoryEntry].self, from: defaults.data(forKey: Keys.history)) ?? [])
             .sorted { $0.updatedAt > $1.updatedAt }
+        trackMemory = LibraryStore.decode([String: [String: String]].self,
+                                          from: defaults.data(forKey: Keys.tracks)) ?? [:]
     }
 
     // MARK: - servers
@@ -76,6 +81,22 @@ final class LibraryStore: ObservableObject {
 
     func savedPosition(url: String) -> Double {
         rememberProgress ? (history.first { $0.url == url }?.positionMs ?? 0) : 0
+    }
+
+    // MARK: - track memory
+
+    /// "记住所选字幕/音轨": which track was picked for a given file, so the next visit
+    /// starts on it. One dictionary rather than a key per file — the file is a URL,
+    /// and a URL makes a poor storage key.
+    func rememberedTrack(url: String, kind: String) -> String? {
+        trackMemory[url]?[kind]
+    }
+
+    func rememberTrack(url: String, kind: String, value: String) {
+        var entry = trackMemory[url] ?? [:]
+        entry[kind] = value
+        trackMemory[url] = entry
+        defaults.set(LibraryStore.encode(trackMemory), forKey: Keys.tracks)
     }
 
     func removeHistory(url: String) {

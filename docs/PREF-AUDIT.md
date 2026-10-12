@@ -415,3 +415,40 @@ Android 此前既没有长按倍速也没有捏合缩放——设置页那两行
 一格，而缺口正好落在窄掉的那一格外面。所以每次改完判据都要先喂一个已知的反例，
 再看总数——总数不变不能证明判据有用。
 
+## 第七个盲点的第一版是坏的，轨道记忆接上了（round 44）
+
+「绑定存在、值从未被使用」这个检查第一版把变量名在文件里出现的**次数**当判据，于是
+漏掉了 `rememberAudioTrack`：键常量的名字和变量名恰好一样
+（`static let rememberAudioTrack = "pref.audio.rememberTrack"`），那一行被算成了一次
+「出现」。
+
+改成逐行判断：`static let` 的常量声明、`@AppStorage` 那一行本身、以及任何
+`PrefKey.<同一个名字>` 的引用都不算使用。改完立刻抓出四个：
+
+| 键 | 状态 |
+|---|---|
+| `audio.rememberTrack` | 本轮接上 |
+| `subtitle.rememberTrack` | 本轮接上 |
+| `gesture.longPressLeftSpeed` | 与「无落点」一类一致（需要按键重复事件） |
+| `gesture.longPressRightSpeed` | 同上 |
+
+**轨道记忆的实现要点**（两端同一套）：
+
+- **存储不进 `pref.` 命名空间**。这是按文件的数据，不是一条设置：iOS 用
+  `trackMemory.v1` 一个 JSON 字典，Android 用 `track_memory`。URL 做键太脆（长、
+  含 `?` 和 `:`），所以整体存取、整体解析，两端都兜住空值和损坏。
+- **恢复的时机是「轨道出现之后」，不是「播放器连上之后」**。Media3 的轨道要等 prepare，
+  KSPlayer 的要等 `readyToPlay`。iOS 复用它原有的 `languagesApplied` 一次性钩子；
+  Android 用一个 `LaunchedEffect` 等 `currentTracks`，最多等 4 秒（一个完全没有轨道
+  的文件不该让协程挂到会话结束）。
+- **记住的轨道优先于语言偏好**。语言偏好是「这部片子没碰过时的默认」，记住的是「上次
+  在这部片子里选的是什么」。`applyRememberedTracks()` 返回它真正恢复的类别，语言偏好
+  只补它没恢复的那几类——而不是「只要设过就一律跳过」，那样在记住的轨道已经不在文件
+  里时会连默认选择也丢掉。
+- **轨道的标识两端各自取**：iOS 用 `MediaPlayerTrack.name`，Android 用
+  `format.id ?? label ?? language`。取不到就不存——存一个空值，下次会匹配到别的轨道。
+
+编译期挡下来的两件事，都是同一条规则：**Kotlin 的局部函数必须先声明后使用**。
+`trackId` 写在 `selectTrack` 后面（报 unresolved reference），`rememberZoom` 写在用它
+的状态后面（同样报错）。另外 `private` 不能修饰局部函数。
+

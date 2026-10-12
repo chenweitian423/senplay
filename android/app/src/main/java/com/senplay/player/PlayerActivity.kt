@@ -274,6 +274,8 @@ private const val P_SWITCH_BLACKOUT = "video.switchBlackout"
 private const val P_LONG_PRESS_SPEED = "gesture.longPressSpeed"
 private const val P_REMEMBER_ZOOM = "gesture.rememberZoomSize"
 private const val P_ZOOM = "gesture.zoom"
+private const val P_REMEMBER_AUDIO_TRACK = "audio.rememberTrack"
+private const val P_REMEMBER_SUBTITLE_TRACK = "subtitle.rememberTrack"
 
 /**
  * The same three modes the iOS side offers, mapped onto the view's own resize modes
@@ -342,6 +344,8 @@ fun PlayerScreen(
     // Declared here rather than with the other preference reads below: the zoom state
     // is initialised from it, and a local val has to exist before it is used.
     val rememberZoom = remember { store.prefBool(P_REMEMBER_ZOOM, true) }
+    val rememberAudioTrack = remember { store.prefBool(P_REMEMBER_AUDIO_TRACK, true) }
+    val rememberSubtitleTrack = remember { store.prefBool(P_REMEMBER_SUBTITLE_TRACK, true) }
     /** "记住缩放大小" — the pinch scale comes back with the next file. */
     var zoom by remember {
         mutableStateOf(if (rememberZoom) store.prefFloat(P_ZOOM, 1f).coerceIn(0.6f, 3f) else 1f)
@@ -575,6 +579,20 @@ fun PlayerScreen(
             .build()
     }
 
+    /**
+     * A name for a track group that survives until the next visit. Media3 gives each
+     * format an id when the container carries one; the label and the language are the
+     * fallbacks. An empty result means the group cannot be identified, and nothing is
+     * stored rather than storing a value that would match some other track.
+     *
+     * Declared before the two functions that call it: a local function has to exist
+     * before it is used.
+     */
+    fun trackId(group: androidx.media3.common.Tracks.Group): String {
+        val format = group.getTrackFormat(0)
+        return format.id ?: format.label ?: format.language ?: ""
+    }
+
     fun selectTrack(group: androidx.media3.common.Tracks.Group) {
         player.trackSelectionParameters = player.trackSelectionParameters
             .buildUpon()
@@ -583,6 +601,44 @@ fun PlayerScreen(
                 androidx.media3.common.TrackSelectionOverride(group.mediaTrackGroup, 0)
             )
             .build()
+        // "记住所选字幕/音轨" — the two switches are separate, so a viewer can keep the
+        // subtitle choice without pinning the audio.
+        val subtitle = group.type == C.TRACK_TYPE_TEXT
+        val remember = if (subtitle) rememberSubtitleTrack else rememberAudioTrack
+        if (remember) {
+            trackId(group).takeIf { it.isNotBlank() }?.let {
+                store.rememberTrack(url, if (subtitle) "subtitle" else "audio", it)
+            }
+        }
+    }
+
+    /** Re-selects the tracks this file was left on, when the switches say to. */
+    fun restoreTracks(target: androidx.media3.common.Player) {
+        if (rememberAudioTrack) {
+            val saved = store.rememberedTrack(url, "audio")
+            tracksOf(C.TRACK_TYPE_AUDIO)
+                .firstOrNull { !saved.isNullOrBlank() && trackId(it.second) == saved }
+                ?.let { selectTrack(it.second) }
+        }
+        if (rememberSubtitleTrack) {
+            val saved = store.rememberedTrack(url, "subtitle")
+            tracksOf(C.TRACK_TYPE_TEXT)
+                .firstOrNull { !saved.isNullOrBlank() && trackId(it.second) == saved }
+                ?.let { selectTrack(it.second) }
+        }
+    }
+
+    // "记住所选字幕/音轨": tracks arrive with the media rather than with the connection,
+    // so this waits for them instead of assuming they are ready when the controller
+    // is. The delay is bounded — a file with no tracks at all must not leave a
+    // coroutine running for the rest of the session.
+    LaunchedEffect(player) {
+        var waited = 0
+        while (waited < 40 && player.currentTracks.groups.isEmpty()) {
+            delay(100)
+            waited++
+        }
+        restoreTracks(player)
     }
 
     /**

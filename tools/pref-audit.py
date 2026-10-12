@@ -44,13 +44,33 @@ IOS_BINDING = re.compile(
 )
 
 
+def _is_use(line: str, variable: str) -> bool:
+    """Whether a line actually consults the bound value.
+
+    Three lines mention the name without using the value, and all three made the
+    first version of this check miss `rememberAudioTrack`: the key constant happens
+    to carry the same name (`static let rememberAudioTrack = "pref.audio.rememberTrack"`),
+    the binding itself names it, and every `PrefKey.<name>` reference is about the key
+    rather than the value.
+    """
+    if not re.search(r"\b" + re.escape(variable) + r"\b", line):
+        return False
+    if re.match(r"\s*static let\b", line):
+        return False
+    if "@AppStorage" in line:
+        return False
+    if re.search(r"PrefKey\." + re.escape(variable) + r"\b", line):
+        return False
+    return True
+
+
 def bound_but_unused(sources: list[pathlib.Path], name_to_key: dict[str, str]) -> dict[str, str]:
-    """Keys whose binding exists but whose variable is never mentioned again.
+    """Keys whose binding exists but whose variable is never consulted.
 
     A binding really does read UserDefaults, which is why it counts as a live read —
-    but a value nothing consults is not a feature. This is how `rememberZoomSize`
-    looked wired on iOS while no code in the player ever read the scale it was meant
-    to restore. Only the declaration itself is ignored; `$name` counts as a use.
+    but a value nothing acts on is not a feature. This is how `rememberZoomSize` and
+    both `rememberTrack` keys looked wired on iOS while no code used them. Only the
+    declaration itself is ignored; `$name` counts as a use.
     """
     out: dict[str, str] = {}
     for path in sources:
@@ -61,7 +81,7 @@ def bound_but_unused(sources: list[pathlib.Path], name_to_key: dict[str, str]) -
             key = literal or name_to_key.get(constant, "")
             if not key:
                 continue
-            if len(re.findall(r"\b" + re.escape(variable) + r"\b", text)) <= 1:
+            if not any(_is_use(line, variable) for line in text.splitlines()):
                 out[key] = path.name
     return out
 

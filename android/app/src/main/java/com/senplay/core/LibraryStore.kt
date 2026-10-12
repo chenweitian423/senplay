@@ -108,6 +108,30 @@ class LibraryStore private constructor(context: Context) {
             prefs.edit().putString(KEY_UA, value).apply()
         }
 
+    // ---- track memory ------------------------------------------------------
+
+    /**
+     * "记住所选字幕/音轨": which track was picked for a given file, so the next visit
+     * starts on it. One JSON object rather than a storage key per file — the file is
+     * a URL, and a URL makes a poor key. The two switches are separate, so a viewer
+     * can keep the subtitle choice without pinning the audio.
+     */
+    fun rememberedTrack(url: String, kind: String): String? = runCatching {
+        JSONObject(value(KEY_TRACKS) ?: "{}")
+            .optJSONObject(url)
+            ?.optString(kind)
+            ?.takeIf { it.isNotBlank() }
+    }.getOrNull()
+
+    fun rememberTrack(url: String, kind: String, track: String) {
+        val root = runCatching { JSONObject(value(KEY_TRACKS) ?: "{}") }
+            .getOrDefault(JSONObject())
+        val entry = root.optJSONObject(url) ?: JSONObject()
+        entry.put(kind, track)
+        root.put(url, entry)
+        setValue(KEY_TRACKS, root.toString())
+    }
+
     // ---- preferences -------------------------------------------------------
     // Keys are namespaced with "pref." so clearPreferences() can wipe playback
     // preferences without touching servers, URL list or history.
@@ -175,6 +199,7 @@ class LibraryStore private constructor(context: Context) {
         private const val KEY_HISTORY = "history"
         private const val KEY_REMEMBER = "remember_progress"
         private const val KEY_UA = "default_user_agent"
+        private const val KEY_TRACKS = "track_memory"
         private const val PREF_PREFIX = "pref."
         const val DEFAULT_UA = "SenPlay/1.0 (Android)"
 
