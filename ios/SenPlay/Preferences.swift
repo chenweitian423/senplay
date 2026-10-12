@@ -340,6 +340,10 @@ private struct InterfacePrefs: View {
     @AppStorage(PrefKey.fastSeekButtons) private var fastSeekButtons = false
     @AppStorage(PrefKey.switchMediaButton) private var switchMediaButton = true
     @AppStorage(PrefKey.screenshotButton) private var screenshotButton = true
+    @AppStorage(PrefKey.playButton) private var playButton = true
+    @AppStorage(PrefKey.aspectRatioButton) private var aspectRatioButton = true
+    @AppStorage(PrefKey.pipButton) private var pipButton = true
+    @AppStorage(PrefKey.speedButton) private var speedButton = true
     @AppStorage(PrefKey.showStartTitle) private var showStartTitle = true
     @AppStorage(PrefKey.showSkipTip) private var showSkipTip = true
     @AppStorage("pref.ui.showOSD") private var showOSD = false
@@ -375,6 +379,10 @@ private struct InterfacePrefs: View {
                 Toggle("快退快进按钮", isOn: $fastSeekButtons)
                 Toggle("切换媒体按钮", isOn: $switchMediaButton)
                 Toggle("截图按钮", isOn: $screenshotButton)
+                Toggle("播放按钮", isOn: $playButton)
+                Toggle("画面比例按钮", isOn: $aspectRatioButton)
+                Toggle("画中画按钮", isOn: $pipButton)
+                Toggle("倍速按钮", isOn: $speedButton)
             }
             Section("提示") {
                 Toggle("开始播放提示标题", isOn: $showStartTitle)
@@ -698,6 +706,7 @@ private struct RestoreDefaults: View {
         PrefKey.progressDot, PrefKey.timeMode, PrefKey.controlBarStyle, PrefKey.autoHideSeconds,
         PrefKey.autoFullScreen, PrefKey.fastSeekButtons, PrefKey.switchMediaButton,
         PrefKey.screenshotButton, PrefKey.showStartTitle, PrefKey.showSkipTip, PrefKey.showCloudThrottleTip,
+        PrefKey.playButton, PrefKey.aspectRatioButton, PrefKey.pipButton, PrefKey.speedButton,
         PrefKey.clickAction, PrefKey.doubleLeftAction, PrefKey.doubleCenterAction, PrefKey.doubleRightAction,
         PrefKey.leftVerticalAction, PrefKey.rightVerticalAction, PrefKey.rememberZoomSize, PrefKey.useAppBrightness,
         PrefKey.preferHardwareDecode, PrefKey.screenshotFormat, PrefKey.jpegQuality, PrefKey.screenshotToClipboard,

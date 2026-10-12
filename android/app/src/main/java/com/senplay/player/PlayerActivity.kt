@@ -237,6 +237,13 @@ private const val P_PROGRESS_DOT = "ui.progressDot"
 private const val P_TIME_MODE = "ui.timeMode"
 private const val P_FAST_SEEK_BUTTONS = "ui.fastSeekButtons"
 private const val P_SCREENSHOT_BUTTON = "ui.screenshotButton"
+// The reference app switches each control-bar button separately
+// (kShowPlayerPlayButton, kShowPlayerPipButton, …) rather than offering one
+// "show the bar" setting.
+private const val P_PLAY_BUTTON = "ui.playButton"
+private const val P_ASPECT_RATIO_BUTTON = "ui.aspectRatioButton"
+private const val P_PIP_BUTTON = "ui.pipButton"
+private const val P_SPEED_BUTTON = "ui.speedButton"
 private const val P_DOUBLE_LEFT = "gesture.doubleLeft"
 private const val P_DOUBLE_CENTER = "gesture.doubleCenter"
 private const val P_DOUBLE_RIGHT = "gesture.doubleRight"
@@ -367,6 +374,10 @@ fun PlayerScreen(
     val timeMode = remember { store.prefString(P_TIME_MODE, "total") }
     val fastSeekButtons = remember { store.prefBool(P_FAST_SEEK_BUTTONS, false) }
     val showScreenshot = remember { store.prefBool(P_SCREENSHOT_BUTTON, true) }
+    val showPlayButton = remember { store.prefBool(P_PLAY_BUTTON, true) }
+    val showAspectRatioButton = remember { store.prefBool(P_ASPECT_RATIO_BUTTON, true) }
+    val showPipButton = remember { store.prefBool(P_PIP_BUTTON, true) }
+    val showSpeedButton = remember { store.prefBool(P_SPEED_BUTTON, true) }
     val doubleLeft = remember { store.prefString(P_DOUBLE_LEFT, "backward") }
     val doubleCenter = remember { store.prefString(P_DOUBLE_CENTER, "playPause") }
     val doubleRight = remember { store.prefString(P_DOUBLE_RIGHT, "forward") }
@@ -1173,10 +1184,12 @@ fun PlayerScreen(
                                 text = { Text(if (showOSD) "隐藏媒体信息" else "媒体信息") },
                                 onClick = { moreMenuOpen = false; showOSD = !showOSD }
                             )
-                            DropdownMenuItem(
-                                text = { Text("画面比例") },
-                                onClick = { moreMenuOpen = false; aspectMenuOpen = true }
-                            )
+                            if (showAspectRatioButton) {
+                                DropdownMenuItem(
+                                    text = { Text("画面比例") },
+                                    onClick = { moreMenuOpen = false; aspectMenuOpen = true }
+                                )
+                            }
                             DropdownMenuItem(
                                 text = { Text(if (showOSD) "隐藏状态信息" else "显示状态信息") },
                                 onClick = {
@@ -1259,16 +1272,18 @@ fun PlayerScreen(
                                 Icon(Icons.Filled.FastRewind, contentDescription = "快退", tint = Color.White)
                             }
                         }
-                        IconButton(onClick = {
-                            if (player.isPlaying) player.pause() else player.play()
-                            isPlaying = !isPlaying
-                        }) {
-                            Icon(
-                                if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                contentDescription = "播放/暂停",
-                                tint = Color.White,
-                                modifier = Modifier.size(30.dp)
-                            )
+                        if (showPlayButton) {
+                            IconButton(onClick = {
+                                if (player.isPlaying) player.pause() else player.play()
+                                isPlaying = !isPlaying
+                            }) {
+                                Icon(
+                                    if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                    contentDescription = "播放/暂停",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(30.dp)
+                                )
+                            }
                         }
                         if (fastSeekButtons) {
                             IconButton(onClick = { seekBy(forwardSeconds) }) {
@@ -1290,8 +1305,10 @@ fun PlayerScreen(
                         Spacer(modifier = Modifier.weight(1f))
 
                         Box {
-                            IconButton(onClick = { speedMenuOpen = true }) {
-                                Icon(Icons.Filled.Speed, contentDescription = "倍速", tint = Color.White)
+                            if (showSpeedButton) {
+                                IconButton(onClick = { speedMenuOpen = true }) {
+                                    Icon(Icons.Filled.Speed, contentDescription = "倍速", tint = Color.White)
+                                }
                             }
                             DropdownMenu(expanded = speedMenuOpen, onDismissRequest = { speedMenuOpen = false }) {
                                 SPEEDS.forEach { value ->
@@ -1320,8 +1337,10 @@ fun PlayerScreen(
                         IconButton(onClick = { showHud("音量 ${(player.volume * 100).toInt()}%") }) {
                             Icon(Icons.Filled.VolumeUp, contentDescription = "音量", tint = Color.White)
                         }
-                        IconButton(onClick = { enterPip() }) {
-                            Icon(Icons.Filled.PictureInPictureAlt, contentDescription = "画中画", tint = Color.White)
+                        if (showPipButton) {
+                            IconButton(onClick = { enterPip() }) {
+                                Icon(Icons.Filled.PictureInPictureAlt, contentDescription = "画中画", tint = Color.White)
+                            }
                         }
                     }
                 }

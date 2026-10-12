@@ -25,6 +25,16 @@ enum PrefKey {
     static let fastSeekButtons = "pref.ui.fastSeekButtons"
     static let switchMediaButton = "pref.ui.switchMediaButton"
     static let screenshotButton = "pref.ui.screenshotButton"
+    // The reference app gives each control-bar button its own switch rather than one
+    // "show the bar" setting (kShowPlayerPlayButton, kShowPlayerPipButton, …). These
+    // are the ones we actually have a control for on both platforms. The reference
+    // app also switches a queue button, a skip button and a chapter button; this
+    // player draws none of those as a control, and a switch that only one platform
+    // can honour is a switch that does nothing on the other one.
+    static let playButton = "pref.ui.playButton"
+    static let aspectRatioButton = "pref.ui.aspectRatioButton"
+    static let pipButton = "pref.ui.pipButton"
+    static let speedButton = "pref.ui.speedButton"
     static let showStartTitle = "pref.ui.showStartTitle"
     static let showSkipTip = "pref.ui.showSkipTip"
     static let showCloudThrottleTip = "pref.ui.showCloudThrottleTip"
@@ -542,6 +552,12 @@ struct PlayerScreen: View {
     @AppStorage(PrefKey.danmakuFont) private var danmakuFontName = "SF Pro"
     @AppStorage("pref.danmaku.convert") private var danmakuConvert = "none"
     @AppStorage("pref.ui.showOSD") private var showOSD = false
+    // Per-button switches: the reference app has one for each control-bar button
+    // rather than a single "show the bar" setting.
+    @AppStorage(PrefKey.playButton) private var showPlayButton = true
+    @AppStorage(PrefKey.aspectRatioButton) private var showAspectRatioButton = true
+    @AppStorage(PrefKey.pipButton) private var showPipButton = true
+    @AppStorage(PrefKey.speedButton) private var showSpeedButton = true
     @AppStorage("pref.play.rememberSpeed") private var rememberSpeed = true
     @AppStorage("pref.play.lastSpeed") private var lastSpeed = 1.0
     @AppStorage(PrefKey.preloadMode) private var preloadMode = "none"
@@ -933,9 +949,11 @@ struct PlayerScreen: View {
                     if fastSeekButtons {
                         Button { seek(by: -Double(backwardSeconds)) } label: { Image(systemName: "gobackward.15") }
                     }
-                    Button { togglePlayPause() } label: {
-                        Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 24, weight: .semibold))
+                    if showPlayButton {
+                        Button { togglePlayPause() } label: {
+                            Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 24, weight: .semibold))
+                        }
                     }
                     if fastSeekButtons {
                         Button { seek(by: Double(forwardSeconds)) } label: { Image(systemName: "goforward.15") }
@@ -948,22 +966,26 @@ struct PlayerScreen: View {
 
                     Spacer()
 
-                    Menu {
-                        ForEach(speeds, id: \.self) { value in
-                            Button(value == 1 ? "1.0x（默认）" : String(format: "%.2fx", value)) {
-                                setSpeed(value)
-                                toast = String(format: "倍速 %.2fx", value)
-                                scheduleToastClear()
+                    if showSpeedButton {
+                        Menu {
+                            ForEach(speeds, id: \.self) { value in
+                                Button(value == 1 ? "1.0x（默认）" : String(format: "%.2fx", value)) {
+                                    setSpeed(value)
+                                    toast = String(format: "倍速 %.2fx", value)
+                                    scheduleToastClear()
+                                }
                             }
+                        } label: {
+                            Text(speed == 1 ? "1.0x" : String(format: "%.2fx", speed))
+                                .font(.system(size: 15, weight: .semibold))
                         }
-                    } label: {
-                        Text(speed == 1 ? "1.0x" : String(format: "%.2fx", speed))
-                            .font(.system(size: 15, weight: .semibold))
                     }
 
                     Button { activePanel = .subtitle } label: { Image(systemName: "captions.bubble") }
                     Button { activePanel = .audio } label: { Image(systemName: "waveform") }
-                    Button { activePanel = .aspect } label: { Image(systemName: "aspectratio") }
+                    if showAspectRatioButton {
+                        Button { activePanel = .aspect } label: { Image(systemName: "aspectratio") }
+                    }
                 }
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.white)
@@ -1116,13 +1138,15 @@ struct PlayerScreen: View {
                                     }
                                 }
                             }
-                            outputRow(title: "画中画",
-                                      detail: kernel?.isPictureInPictureActive == true ? "进行中" : "关闭",
-                                      active: kernel?.isPictureInPictureActive == true) {
-                                let next = !(kernel?.isPictureInPictureActive ?? false)
-                                kernel?.setPictureInPicture(next)
-                                toast = next ? "已进入画中画" : "已退出画中画"
-                                scheduleToastClear()
+                            if showPipButton {
+                                outputRow(title: "画中画",
+                                          detail: kernel?.isPictureInPictureActive == true ? "进行中" : "关闭",
+                                          active: kernel?.isPictureInPictureActive == true) {
+                                    let next = !(kernel?.isPictureInPictureActive ?? false)
+                                    kernel?.setPictureInPicture(next)
+                                    toast = next ? "已进入画中画" : "已退出画中画"
+                                    scheduleToastClear()
+                                }
                             }
                             outputRow(title: "投屏",
                                       detail: kernel?.isExternalPlaybackActive == true ? "已连接" : "未连接",
