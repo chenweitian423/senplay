@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenu
@@ -22,17 +23,55 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.senplay.core.LibraryStore
 
 /**
- * Settings surface mirroring the reference app's ten preference groups.
- * Every control writes a key that LibraryStore namespaces with "pref." — the literal
- * here must not carry the prefix itself, or the stored name becomes pref.pref.*
+ * Settings hub. Mirrors the reference app's grouping: 数据 / 媒体库配置 /
+ * 媒体, each opening a sub-page. Every control writes a key that LibraryStore
+ * namespaces with "pref." — the literal here must not carry the prefix itself,
+ * or the stored name becomes pref.pref.*
  */
 @Composable
 fun SettingsScreen(store: LibraryStore) {
+    var page by remember { mutableStateOf<String?>(null) }
+    val open = page
+    if (open == null) {
+        SettingsHome(onOpen = { page = it })
+    } else {
+        SettingsDetail(store, open, onBack = { page = null })
+    }
+}
+
+@Composable
+private fun SettingsHome(onOpen: (String) -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+    ) {
+        GroupHeader("数据")
+        SettingsEntry("列表配置", "标题栏、缩略图、文件信息与文件类型筛选") { onOpen("list") }
+        SettingsEntry("媒体库", "对 Emby / Jellyfin / Plex / fnOS 服务生效") { onOpen("library") }
+        SettingsEntry("数据同步", "默认启动模块、主题、User-Agent 与播放历史") { onOpen("general") }
+        GroupHeader("媒体库配置")
+        SettingsEntry("播放设置", "断点续播、定位精度、快进快退与预缓存") { onOpen("playback") }
+        SettingsEntry("界面偏好", "控制栏元素、自动隐藏与状态信息") { onOpen("interface") }
+        SettingsEntry("播放手势", "单击、双击、滑动与长按的绑定") { onOpen("gesture") }
+        GroupHeader("媒体")
+        SettingsEntry("视频设置", "解码方式、截图格式与画质加工") { onOpen("video") }
+        SettingsEntry("音频设置", "音轨记忆、音频增强与输出延迟") { onOpen("audio") }
+        SettingsEntry("字幕设置", "颜色、描边、语言与加载规则") { onOpen("subtitle") }
+        SettingsEntry("弹幕", "字体、区域、速度与屏蔽词") { onOpen("danmaku") }
+        GroupHeader("其他")
+        SettingsEntry("关于", "版本与实现来源说明") { onOpen("about") }
+    }
+}
+
+@Composable
+private fun SettingsDetail(store: LibraryStore, page: String, onBack: () -> Unit) {
     var ua by remember { mutableStateOf(store.defaultUserAgent) }
     var historyCount by remember { mutableStateOf(store.history().size) }
 
@@ -41,25 +80,23 @@ fun SettingsScreen(store: LibraryStore) {
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
     ) {
-        // ---------------------------------------------------------------- 通用
-        GroupHeader("通用")
+        SettingsBackBar(title = when (page) {
+            "list" -> "列表配置"
+            "library" -> "媒体库"
+            "general" -> "数据同步"
+            "playback" -> "播放设置"
+            "interface" -> "界面偏好"
+            "gesture" -> "播放手势"
+            "video" -> "视频设置"
+            "audio" -> "音频设置"
+            "subtitle" -> "字幕设置"
+            "danmaku" -> "弹幕"
+            "about" -> "关于"
+            else -> "设置"
+        }, onBack = onBack)
 
-        PrefSwitch(store, "general.iCloudSync", "iCloud同步", "服务器、网盘、IPTV、URL及其播放信息支持同步", true)
-        PrefChoice(
-            store, "general.defaultModule", "默认启动模块",
-            listOf("files" to "文件", "servers" to "服务器", "iptv" to "IPTV", "record" to "记录"),
-            "files"
-        )
-        PrefSwitch(store, "ui.showRecordModule", "显示记录模块", null, true)
-        PrefChoice(
-            store, "general.themeColor", "主题颜色",
-            listOf(
-                "blue" to "蓝", "cyan" to "青", "green" to "绿", "purple" to "紫",
-                "orange" to "橙", "red" to "红", "indigo" to "靛"
-            ),
-            "blue"
-        )
-
+        when (page) {
+            "list" -> {
         // ---------------------------------------------------------------- 列表
         GroupHeader("列表")
         Text(
@@ -99,6 +136,8 @@ fun SettingsScreen(store: LibraryStore) {
         PrefSwitch(store, "list.fileType.subtitle", "字幕", null, true)
         PrefSwitch(store, "list.fileType.other", "其他", null, true)
 
+            }
+            "library" -> {
         // -------------------------------------------------------------- 媒体库
         GroupHeader("媒体库")
         Text(
@@ -126,6 +165,8 @@ fun SettingsScreen(store: LibraryStore) {
         PrefSwitch(store, "library.showMediaInfo", "显示媒体信息", null, true)
         PrefSwitch(store, "library.showSimilar", "显示类似作品", null, true)
 
+            }
+            "playback" -> {
         // ---------------------------------------------------------------- 播放
         GroupHeader("播放设置")
         PrefSwitch(store, "play.resumeFromLast", "从上次进度播放", null, true)
@@ -152,6 +193,8 @@ fun SettingsScreen(store: LibraryStore) {
             "可解决代理工具未开启 Tun 模式（增强模式）时，无法代理播放内核的问题", true
         )
 
+            }
+            "interface" -> {
         // ---------------------------------------------------------------- 界面
         GroupHeader("界面偏好")
         PrefSwitch(store, "ui.progressDot", "进度条圆点", null, true)
@@ -179,6 +222,8 @@ fun SettingsScreen(store: LibraryStore) {
         PrefSwitch(store, "ui.showSkipTip", "即将跳过片头/片尾", null, true)
         PrefSwitch(store, "ui.showCloudThrottleTip", "网盘限速提示", null, true)
 
+            }
+            "gesture" -> {
         // ---------------------------------------------------------------- 手势
         GroupHeader("播放手势")
         PrefChoice(
@@ -221,6 +266,8 @@ fun SettingsScreen(store: LibraryStore) {
             modifier = Modifier.padding(16.dp)
         )
 
+            }
+            "video" -> {
         // ---------------------------------------------------------------- 视频
         GroupHeader("视频设置")
         PrefSwitch(
@@ -239,6 +286,8 @@ fun SettingsScreen(store: LibraryStore) {
         PrefSwitch(store, "video.upscaling", "AI超分辨率", "适用于 1080P 及以下视频；需要播放内核支持", false)
         PrefSlider(store, "video.jpegQuality", "JPEG 质量", 0.5f, 1f, 0.05f, 0.8f, "%")
 
+            }
+            "audio" -> {
         // ---------------------------------------------------------------- 音频
         GroupHeader("音频设置")
         PrefSwitch(store, "audio.rememberTrack", "记住所选音轨", null, true)
@@ -258,6 +307,8 @@ fun SettingsScreen(store: LibraryStore) {
         )
         PrefSlider(store, "audio.globalDelayMs", "全局音频延迟", -2000f, 2000f, 50f, 0f, "ms")
 
+            }
+            "subtitle" -> {
         // ---------------------------------------------------------------- 字幕
         GroupHeader("字幕设置")
         PrefSwitch(store, "subtitle.rememberTrack", "记住所选字幕", null, true)
@@ -307,6 +358,8 @@ fun SettingsScreen(store: LibraryStore) {
         PrefSlider(store, "subtitle.outlineWidth", "描边宽度", 0f, 5f, 0.5f, 1f, "px")
         PrefSlider(store, "subtitle.shadowWidth", "阴影宽度", 0f, 5f, 0.5f, 1f, "px")
 
+            }
+            "danmaku" -> {
         // ---------------------------------------------------------------- 弹幕
         GroupHeader("弹幕")
         PrefSwitch(store, "danmaku.enabled", "启用弹幕", "关闭后不显示弹幕按钮并且不加载弹幕", true)
@@ -322,6 +375,26 @@ fun SettingsScreen(store: LibraryStore) {
         PrefSlider(store, "danmaku.size", "字号", 12f, 48f, 1f, 25f, "")
         PrefSlider(store, "danmaku.speed", "速度", 0.1f, 1f, 0.05f, 0.5f, "x")
 
+            }
+            "general" -> {
+        // ---------------------------------------------------------------- 通用
+        GroupHeader("通用")
+
+        PrefSwitch(store, "general.iCloudSync", "iCloud同步", "服务器、网盘、IPTV、URL及其播放信息支持同步", true)
+        PrefChoice(
+            store, "general.defaultModule", "默认启动模块",
+            listOf("files" to "文件", "servers" to "服务器", "iptv" to "IPTV", "record" to "记录"),
+            "files"
+        )
+        PrefSwitch(store, "ui.showRecordModule", "显示记录模块", null, true)
+        PrefChoice(
+            store, "general.themeColor", "主题颜色",
+            listOf(
+                "blue" to "蓝", "cyan" to "青", "green" to "绿", "purple" to "紫",
+                "orange" to "橙", "red" to "红", "indigo" to "靛"
+            ),
+            "blue"
+        )
         // ------------------------------------------------------------ 播放与历史
         GroupHeader("播放与历史")
         ListItem(
@@ -379,6 +452,8 @@ fun SettingsScreen(store: LibraryStore) {
             }
         )
 
+            }
+            "about" -> {
         // ------------------------------------------------------------------ 关于
         GroupHeader("关于")
         Text(
@@ -392,6 +467,8 @@ fun SettingsScreen(store: LibraryStore) {
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
         )
+            }
+        }
     }
 }
 
@@ -525,5 +602,29 @@ private fun PrefSlider(
             valueRange = min..max,
             steps = if (step > 0f) ((max - min) / step).toInt() - 1 else 0
         )
+    }
+}
+
+/** One row of the hub: what it is, what it covers, and where it leads. */
+@Composable
+private fun SettingsEntry(title: String, subtitle: String, onClick: () -> Unit) {
+    ListItem(
+        headlineContent = { Text(title) },
+        supportingContent = { Text(subtitle) },
+        modifier = Modifier.clickable(onClick = onClick)
+    )
+}
+
+/** The way back out of a sub-page, and which page you are on. */
+@Composable
+private fun SettingsBackBar(title: String, onBack: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        TextButton(onClick = onBack) { Text("‹ 设置") }
+        Text(title, style = MaterialTheme.typography.titleMedium)
     }
 }
