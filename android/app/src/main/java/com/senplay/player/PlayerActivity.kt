@@ -33,6 +33,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Comment
+import androidx.compose.material.icons.outlined.Comment
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.MoreVert
@@ -477,7 +479,7 @@ fun PlayerScreen(
     }
     val skipOutroSeconds = remember { store.prefInt(P_SKIP_OUTRO, 0) }
     val nextCountdown = remember { store.prefInt(P_NEXT_COUNTDOWN, 5) }
-    val danmakuEnabled = remember { store.prefBool(P_DANMAKU_ENABLED, true) }
+    var danmakuEnabled by remember { mutableStateOf(store.prefBool(P_DANMAKU_ENABLED, true)) }
     val danmakuSize = remember { store.prefFloat(P_DANMAKU_SIZE, 25f).toDouble() }
     val danmakuSpeed = remember { store.prefFloat(P_DANMAKU_SPEED, 0.5f).toDouble() }
     val danmakuArea = remember { store.prefFloat(P_DANMAKU_AREA, 0.15f).toDouble() }
@@ -1435,6 +1437,17 @@ fun PlayerScreen(
                         }
                         IconButton(onClick = { trackPanel = TrackPanel.SUBTITLE }) {
                             Icon(Icons.Filled.Subtitles, contentDescription = "字幕", tint = Color.White)
+                        }
+                        // The reference keeps a danmaku toggle in the control bar.
+                        IconButton(onClick = {
+                            danmakuEnabled = !danmakuEnabled
+                            store.setPrefBool(P_DANMAKU_ENABLED, danmakuEnabled)
+                        }) {
+                            Icon(
+                                if (danmakuEnabled) Icons.Filled.Comment else Icons.Outlined.Comment,
+                                contentDescription = "弹幕",
+                                tint = Color.White
+                            )
                         }
                         IconButton(onClick = { trackPanel = TrackPanel.AUDIO }) {
                             Icon(Icons.Filled.Audiotrack, contentDescription = "音轨", tint = Color.White)

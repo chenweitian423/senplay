@@ -1065,6 +1065,11 @@ struct PlayerScreen: View {
                     }
 
                     Button { activePanel = .subtitle } label: { Image(systemName: "captions.bubble") }
+                    // The reference keeps a danmaku toggle in the control bar. With only
+                    // the setting, turning it off mid-playback meant leaving the player.
+                    Button { danmakuEnabled.toggle() } label: {
+                        Image(systemName: danmakuEnabled ? "text.bubble.fill" : "text.bubble")
+                    }
                     Button { activePanel = .audio } label: { Image(systemName: "waveform") }
                     if showAspectRatioButton {
                         Button { activePanel = .aspect } label: { Image(systemName: "aspectratio") }
