@@ -25,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.senplay.core.LibraryStore
 
@@ -74,6 +75,14 @@ private fun SettingsHome(onOpen: (String) -> Unit) {
 private fun SettingsDetail(store: LibraryStore, page: String, onBack: () -> Unit) {
     var ua by remember { mutableStateOf(store.defaultUserAgent) }
     var historyCount by remember { mutableStateOf(store.history().size) }
+    // Read from the package rather than a literal: the row said 1.0.0 while the
+    // build ships whatever versionName holds.
+    val context = LocalContext.current
+    val appVersion = remember {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull() ?: "—"
+    }
 
     Column(
         modifier = Modifier
@@ -463,7 +472,7 @@ private fun SettingsDetail(store: LibraryStore, page: String, onBack: () -> Unit
             modifier = Modifier.padding(16.dp)
         )
         Text(
-            "版本 1.0.0",
+            "版本 $appVersion",
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
         )
