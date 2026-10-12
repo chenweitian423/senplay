@@ -509,3 +509,40 @@ Media3 的 SubtitleView 都从字幕文件取样式，没有「覆盖文件样�
 （两端都没有 ISO 播放路径）、`library.showMine` 与 `preferredVersion`（结构改动 / 选项集
 不在取证材料里）、`list.showNewTag`（缺判据）、`general.iCloudSync`（需要 entitlement）。
 
+
+## 参考键清单与本仓对照（round 46）
+
+从砸壳 IPA 里挖出 195 条应用自有键（见 `docs/REFERENCE-KEYS.md`）。逐条对照后分三类。
+
+### 已接（round 46）
+
+| 组 | 键 | 落点 |
+|---|---|---|
+| 控制栏按钮 | `ui.playButton` / `aspectRatioButton` / `pipButton` / `speedButton` | 两端控制栏与「更多」面板 |
+| 文件类型 | `list.fileType.video/music/picture/subtitle/other` | 两端服务器文件夹列表 |
+| 状态信息 | `ui.osd.playSpeed` / `systemTime` / `onlyLandscape` | 两端 OSD |
+| 字幕样式 | `subtitle.textColor` / `bgColor` / `opacity` / `verticalOffset` | iOS 自绘文本层；Android 的 `CaptionStyleCompat` |
+
+### 判定无落点（本仓结构不同，不再重复评估）
+
+- `kRecordShowBookmarkFile` / `BookmarkFolder` / `Common` / `Continue` / `Favirote` /
+  `Histroy` / `Screen`：参考的记录模块有七个板块，本仓是一个列表。
+- `kRecordPlayHistroy` / `kRecordAudioHistroy`：同上，本仓不区分视频与音频记录。
+- `kSearchShowDrive` / `kSearchShowMedia` / `kShowMbGlobalSearchButton` / `kDisplaySearchBox`：
+  参考有独立的搜索模块，本仓的搜索是列表内过滤。
+- `kEmbySearchHistory` / `kSubtitleSearchHistoryShow` / `kDanmuSearchHistoryShow`：本仓没有搜索历史。
+- `kShowPlayerFullScreenButton`：播放界面本即全屏，没有窗口态可切。
+- `kShowPlayerListButton` / `kShowPlayerSkipButton`：没有对应的控件可开关。
+- `kShowPlayerDlnaButton`：iOS 的投屏是系统 AirPlay 按钮，不在控制栏。
+- `kShowOSDInternetSpeed`：需要字节或带宽计数，Android 侧本仓没有挂第二个 analytics listener。
+- `kSubtitleStrokeSize` / `kSubtitleShadowColor` / `kSubtitleShadowSize` /
+  `kSubtitleMaskCenterX` / `CenterY` / `Width` / `Height` / `kSubtitleHDRBrightnessValue`：
+  Android 的 `CaptionStyleCompat` 只带文字色、背景色、描边色与字体，没有描边宽度、
+  阴影和矩形遮罩的接口。
+
+### 待做（第三档）
+
+`kEnableDolbyP7FEL` / `kEnableDolbyP7ToP81` / `kEnableDolbyAtmos` /
+`kVideoFrameInterpolationEnabled` / `kVideoUpscalingLevel` / `kSDRToHDREnabled`，
+以及 `kAudioEnhancePercent`（Android 有 `LoudnessEnhancer.setTargetGain`）。
+做之前先确认两端内核各自的可用接口，再决定是否落得下去。
