@@ -1056,11 +1056,12 @@ fun PlayerScreen(
     ) {
         var playerView by remember { mutableStateOf<PlayerView?>(null) }
         trackPanel?.let { panel ->
-            // The reference's queue button opens the play queue. Jumping to an entry
-            // is not wired here: this activity receives the queue through its launch
-            // intent, so a jump means re-entering through that path rather than
-            // seeking the current player. Showing the list and which entry is playing
-            // is what this panel can honestly do today.
+            // The reference's queue button opens the play queue, and picking an entry
+            // jumps to it. That reuses the path the automatic advance already takes —
+            // the same route the switch-media button and the end-of-item countdown go
+            // through — so a manual pick and an automatic one cannot diverge. iOS has
+            // done it this way since its panel landed; this side only ever showed the
+            // list, which read as if the entries were not clickable.
             if (panel == TrackPanel.QUEUE) {
                 val currentUrl = player.currentMediaItem?.localConfiguration?.uri?.toString()
                 AlertDialog(
@@ -1071,9 +1072,13 @@ fun PlayerScreen(
                             if (queue.isEmpty()) {
                                 Text("当前没有播放队列")
                             }
-                            queue.forEach { (url, name) ->
-                                TextButton(onClick = { trackPanel = null }) {
-                                    Text(if (url == currentUrl) "$name（正在播放）" else name)
+                            queue.forEach { (queueUrl, name) ->
+                                val isCurrent = queueUrl == currentUrl
+                                TextButton(onClick = {
+                                    trackPanel = null
+                                    if (!isCurrent) advanceToNext(queueUrl to name)
+                                }) {
+                                    Text(if (isCurrent) "$name（正在播放）" else name)
                                 }
                             }
                         }
