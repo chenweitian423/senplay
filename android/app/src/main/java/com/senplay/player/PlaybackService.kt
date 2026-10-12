@@ -35,10 +35,19 @@ class PlaybackService : MediaSessionService() {
         super.onCreate()
 
         val store = LibraryStore.get(this)
+        // "使用系统代理": OkHttp follows the system proxy through the default selector,
+        // so switching the preference off has to say so explicitly. Without this the
+        // switch would read as connected while every request still went through the
+        // proxy.
+        val http = if (store.prefBool("play.useSystemProxy", true)) {
+            Http.client
+        } else {
+            Http.client.newBuilder().proxy(java.net.Proxy.NO_PROXY).build()
+        }
         val dataSource = SchemeRoutingDataSourceFactory(
             DefaultDataSource.Factory(
                 this,
-                OkHttpDataSource.Factory(Http.client).setUserAgent(store.defaultUserAgent)
+                OkHttpDataSource.Factory(http).setUserAgent(store.defaultUserAgent)
             )
         )
 

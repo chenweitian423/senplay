@@ -96,5 +96,10 @@ data class PlayRequest(
     val headers: Map<String, String> = emptyMap(),
     val saveToUrlList: Boolean = false,
     /** Playable siblings of the current folder, used for continuous playback. */
-    val queue: List<Pair<String, String>> = emptyList()
+    val queue: List<Pair<String, String>> = emptyList(),
+    /**
+     * "网盘限速提示". A presigned object-storage URL says nothing about where it came
+     * from, so the source has to travel with the request.
+     */
+    val isCloudDrive: Boolean = false
 )

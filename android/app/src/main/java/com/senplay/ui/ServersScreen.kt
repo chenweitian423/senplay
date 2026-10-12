@@ -480,7 +480,8 @@ private fun ServerBrowserScreen(
                         name = entry.name,
                         subtitleUrl = subtitle,
                         positionMs = entry.positionMs,
-                        queue = queue
+                        queue = queue,
+                        isCloudDrive = true
                     )
                 } else if (server.type == "plex") {
                     PlayRequest(

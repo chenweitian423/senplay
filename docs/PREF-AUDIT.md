@@ -15,9 +15,9 @@
 
 ## 当前状态
 
-keys with a real read on iOS:     70
-keys with a real read on Android: 54
---- declared, shown in settings, read by nothing else (48) ---
+keys with a real read on iOS:     95
+keys with a real read on Android: 79
+--- declared, shown in settings, read by nothing else (20) ---
 
 ## 未生效的键
 
@@ -212,3 +212,89 @@ scheme，`PlaybackService` 用的是它。
 **这三类混在一起的后果**：把它们都叫「未完成」会让剩下的工作看起来比实际大，也会
 让真正无落点的那些被反复重新评估。每次核对都要重新判断一遍某个键属于哪一类，这就是
 这份文档存在的理由。
+
+## 接上的十个（round 41）
+
+十个键从「只出现在设置页」变成「有一处真的读它」，双端都改、各自编译验证：
+
+| 键 | 落点 | 依据 |
+|---|---|---|
+| `gesture.click` | iOS `perform(clickAction)`；Android `performGesture()` | 设置页下拉的默认值是「播放/暂停」，而两端此前都把它写死成「显示/隐藏控制栏」。接上之后**默认行为会变**——这正是设置页那行字的意思 |
+| `play.pauseAutoLock` | iOS `isIdleTimerDisabled`；Android `FLAG_KEEP_SCREEN_ON` | 文案「暂停后自动锁屏」：播放中必须常亮，暂停之后是否交还给系统锁屏由开关决定 |
+| `video.screenshotFormat` + `jpegQuality` | iOS 编码后写 `PHPhotoLibrary`；Android `Bitmap.compress` | 两端此前都硬编码 PNG。「jpg」是设置页的默认值，此前是空头支票 |
+| `play.useSystemProxy` | iOS `KSOptions.useSystemHTTPProxy`；Android OkHttp `Proxy.NO_PROXY` | KSPlayer 的 `MediaPlayerProtocol.setHttpProxy()` 把这个开关写进 `http_proxy` 环境变量交给 FFmpeg；OkHttp 默认跟随系统代理，关闭必须显式写 NO_PROXY |
+| `video.switchBlackout` | iOS 切换瞬间盖黑；Android `setKeepContentOnPlayerReset(!switchBlackout)` | Android 此前硬编码保留上一帧，与设置页默认的「开」（不残留）**正好相反** |
+| `danmaku.font` | iOS `UIFont(name:)`；Android `FontFamily(Typeface)` | 「SF Pro」是参考实现给系统字体起的名字，两端都按「认不出这个名字就用系统字体」处理，输入错字不会导致弹幕消失 |
+| `danmaku.convert` | iOS `CFStringTransform`；Android ICU `Transliterator` | 两端都用系统的 ICU 数据，不自己维护字表；设备缺规则时保留原文 |
+| `general.defaultModule` | iOS `TabView(selection:)` 初值；Android 初始 tab | 只在启动时读一次，不跟随设置变化把用户正在看的那一页换掉 |
+| `ui.showCloudThrottleTip` | 播放来自 S3 的请求时提示一次 | `PlayRequest` 新增 `isCloudDrive`：预签名地址里没有来源信息，标记必须随请求走。与「开始播放提示标题」同属播放时的提示，这是它的位置依据 |
+| `video.decodeThreads` | iOS `KSOptions.decoderOptions["threads"]` | 只对 FFmpeg 路径有意义的「软件解码线程」。Android 没有对应 API，未接 |
+
+## 剩下的十个重新分了类（round 41）
+
+做这一批时发现上一轮的四类分得还不够细，有两类被混进了「没接线」：
+
+**不是「没接线」，是功能本身不存在**——`list.fillThumbnail` / `showPreview` /
+`previewPosition`。这三个键描述的是同一件事：列表里每个视频项的缩略图、它取哪一帧
+（`previewTimePosition`，0 表示不生成）、以及它是铺满还是留边（`thumbnailCropDisplay`）。
+可是 `grep -rn thumbnail` 在两个平台的源码里**只命中设置页那一行**，两端都没有任何
+缩略图实现。接这三个键的前提是先做出一条预览图链路，而参考实现那条链路的规模从同族
+文案就能看出来：`automaticallyGeneratePreview`、`updatePreviewImage`、
+`numberOfConcurrentThreadsInPreviewImage`、`prioritizeEmbeddedThumbnail`
+（"开启后将优先使用文件自身内嵌的封面，预览图时间设定则不起作用"）。
+
+**不是「没接线」，是无落点**：
+
+- `video.hdrVivid`。KSPlayer 确实读 `AV_FRAME_DATA_DYNAMIC_HDR_VIVID`，但那个分支
+  只是把 side data 绑定下来，之后没有任何使用；`DynamicRange` 枚举只有
+  sdr / hdr10 / hlg / dolbyVision。Media3 侧同样没有这个开关。参考实现的说明里写着
+  「低性能设备不建议开启，否则可能导致发热或掉帧」——那是软解 HDR Vivid，本仓两端
+  都没有这条解码路径。
+- `play.isoMode`。两端都没有 ISO 播放路径（`grep -i iso` 只命中 `episode` 和时间码）。
+  「兼容模式/快速模式」描述的是网络读取方式，内核没有暴露入口。
+- `audio.globalDelayMs`。KSOptions 里只有 `videoDelay`，没有音频延迟；Media3 也没有
+  对应 API。
+
+**仍然缺证据**：
+
+- `list.showNewTag`。「New」按什么算新，取证字符串里只有 `newTag = New标记` 一条，
+  96 个 `k` 开头的键名里没有日期阈值之类的东西。`showRemaining` 已经证明按名字推断
+  行为会错，这条不猜。
+- `library.preferredVersion` / `showMine`：与上一轮相同。
+
+**平台差异，不是待办**：
+
+- `general.iCloudSync`：iOS 侧可以用 `NSUbiquitousKeyValueStore` 接上，但需要
+  `ubiquity-kvstore-identifier` entitlement，而且本机没有第二个 iCloud 账号可以验证；
+  Android 没有 iCloud 这个平台概念。
+- `video.decodeThreads`：iOS 已接，Android 的 Media3 没有软解线程数这个设置。
+
+## 这一轮查出来的一个真问题（round 41）
+
+`PlayerActivity` 在 manifest 里是 `launchMode="singleTop"`，而它**没有实现
+`onNewIntent`**。连播和「切换媒体」都是 `startActivity` 一个新的 intent 给同一个
+Activity；singleTop 让这个 intent 复用已有实例，于是走 `onNewIntent`——而那里没有
+任何代码，新 intent 只是被存下来。
+
+结果：Android 的「自动连播下一个」和播放器的「切换媒体」按钮**点了什么都不发生**。
+它们能编译、自洽、测试也不报错，和之前那七个控件是同一类。
+
+修法是补上 `onNewIntent`，并把播放参数提升为 Compose 状态、用 `key(url)` 重建播放
+界面。这样切集变成同一 Activity 内换媒体，`video.switchBlackout` 也才有了真正的落点
+（同一块 PlayerView 重置时保不保留上一帧）。
+
+## `pref-audit.py` 的第五个盲点（round 41）
+
+这一轮顺手核对时发现：iOS 的 `ui.showStartTitle` 和 `ui.showSkipTip` 只在设置页出现，
+播放器里一次都没读——但它们在报告里**不是死键**。
+
+原因是判据最后一步：
+
+```python
+dead = [k for k in all_keys if not ios.get(k) and not android.get(k)]
+```
+
+「两端都没读」才算死。单端缺一个，报告一声不响。这两个键 Android 读了，于是整条记录
+消失，看起来双端都好。这个工具的每一次出错都是同一个形状：**判据比现实窄，缺口就
+隐身**。要补的是按端输出「只有一端接了」的清单，而不是继续用「两端取交集」当结论。
+

@@ -56,6 +56,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
@@ -105,38 +106,87 @@ import kotlinx.coroutines.delay
 
 class PlayerActivity : ComponentActivity() {
 
+    private data class Media(
+        val url: String,
+        val name: String,
+        val subtitle: String?,
+        val userAgent: String?,
+        val positionMs: Long,
+        val queue: List<Pair<String, String>>,
+        val cloudDrive: Boolean
+    )
+
+    private var media by mutableStateOf<Media?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val url = intent.getStringExtra(EXTRA_URL)
-        if (url.isNullOrBlank()) {
+        val first = read(intent)
+        if (first == null) {
             finish()
             return
         }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
-
-        val queue = intent.getStringArrayListExtra(EXTRA_QUEUE_URLS).orEmpty()
-            .zip(intent.getStringArrayListExtra(EXTRA_QUEUE_NAMES).orEmpty())
+        media = first
 
         setContent {
             SenPlayTheme {
-                PlayerScreen(
-                    url = url,
-                    name = intent.getStringExtra(EXTRA_NAME) ?: url.substringAfterLast('/'),
-                    subtitleUrl = intent.getStringExtra(EXTRA_SUBTITLE),
-                    userAgent = intent.getStringExtra(EXTRA_USER_AGENT),
-                    startPositionMs = intent.getLongExtra(EXTRA_POSITION_MS, 0L),
-                    sourceUri = intent.data,
-                    queue = queue,
-                    onFinish = { finish() },
-                    onPlayNext = { nextUrl, nextTitle ->
-                        startActivity(intentFor(this, nextUrl, nextTitle,
-                                                userAgent = intent.getStringExtra(EXTRA_USER_AGENT),
-                                                queue = queue))
+                val playing = media
+                if (playing != null) {
+                    // Keyed on the URL: the queue hands this same instance the next
+                    // item, and the player screen has to be rebuilt around it.
+                    key(playing.url) {
+                        PlayerScreen(
+                            url = playing.url,
+                            name = playing.name,
+                            subtitleUrl = playing.subtitle,
+                            userAgent = playing.userAgent,
+                            startPositionMs = playing.positionMs,
+                            sourceUri = intent.data,
+                            queue = playing.queue,
+                            cloudDrive = playing.cloudDrive,
+                            onFinish = { finish() },
+                            onPlayNext = { nextUrl, nextTitle ->
+                                startActivity(
+                                    intentFor(
+                                        this, nextUrl, nextTitle,
+                                        userAgent = playing.userAgent,
+                                        queue = playing.queue
+                                    )
+                                )
+                            }
+                        )
                     }
-                )
+                }
             }
         }
+    }
+
+    /**
+     * `singleTop` makes the next item in the queue reuse this instance instead of
+     * creating one. Without this override the new intent would only be stored and
+     * nothing else would happen — "自动连播" and the switch-media button would both
+     * look like they do nothing at all.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        read(intent)?.let { media = it }
+    }
+
+    private fun read(intent: Intent?): Media? {
+        val url = intent?.getStringExtra(EXTRA_URL)
+        if (url.isNullOrBlank()) return null
+        return Media(
+            url = url,
+            name = intent.getStringExtra(EXTRA_NAME) ?: url.substringAfterLast('/'),
+            subtitle = intent.getStringExtra(EXTRA_SUBTITLE),
+            userAgent = intent.getStringExtra(EXTRA_USER_AGENT),
+            positionMs = intent.getLongExtra(EXTRA_POSITION_MS, 0L),
+            queue = intent.getStringArrayListExtra(EXTRA_QUEUE_URLS).orEmpty()
+                .zip(intent.getStringArrayListExtra(EXTRA_QUEUE_NAMES).orEmpty()),
+            cloudDrive = intent.getBooleanExtra(EXTRA_CLOUD_DRIVE, false)
+        )
     }
 
     companion object {
@@ -147,6 +197,7 @@ class PlayerActivity : ComponentActivity() {
         const val EXTRA_POSITION_MS = "extra_position_ms"
         const val EXTRA_QUEUE_URLS = "extra_queue_urls"
         const val EXTRA_QUEUE_NAMES = "extra_queue_names"
+        const val EXTRA_CLOUD_DRIVE = "extra_cloud_drive"
 
         fun intentFor(
             context: Context,
@@ -155,13 +206,15 @@ class PlayerActivity : ComponentActivity() {
             subtitle: String? = null,
             userAgent: String? = null,
             positionMs: Long = 0L,
-            queue: List<Pair<String, String>> = emptyList()
+            queue: List<Pair<String, String>> = emptyList(),
+            cloudDrive: Boolean = false
         ): Intent = Intent(context, PlayerActivity::class.java).apply {
             putExtra(EXTRA_URL, url)
             putExtra(EXTRA_NAME, name)
             subtitle?.let { putExtra(EXTRA_SUBTITLE, it) }
             userAgent?.let { putExtra(EXTRA_USER_AGENT, it) }
             putExtra(EXTRA_POSITION_MS, positionMs)
+            putExtra(EXTRA_CLOUD_DRIVE, cloudDrive)
             if (queue.isNotEmpty()) {
                 putStringArrayListExtra(EXTRA_QUEUE_URLS, ArrayList(queue.map { it.first }))
                 putStringArrayListExtra(EXTRA_QUEUE_NAMES, ArrayList(queue.map { it.second }))
@@ -195,17 +248,25 @@ private const val P_DANMAKU_SIZE = "danmaku.size"
 private const val P_DANMAKU_SPEED = "danmaku.speed"
 private const val P_DANMAKU_AREA = "danmaku.area"
 private const val P_DANMAKU_SKIP_SHORT = "danmaku.skipShort"
+private const val P_DANMAKU_FONT = "danmaku.font"
+private const val P_DANMAKU_CONVERT = "danmaku.convert"
 private const val P_PRELOAD_MODE = "play.preloadMode"
 private const val P_AUDIO_ENHANCE = "audio.enhance"
 private const val P_MULTI_CHANNEL = "audio.multiChannel"
 private const val P_SHOW_OSD = "ui.showOSD"
 private const val P_SHOW_SKIP_TIP = "ui.showSkipTip"
 private const val P_SHOW_START_TITLE = "ui.showStartTitle"
+private const val P_SHOW_CLOUD_THROTTLE_TIP = "ui.showCloudThrottleTip"
 private const val P_AUTO_FULLSCREEN = "ui.autoFullScreen"
 private const val P_DANMAKU_KEYWORDS = "danmaku.keywords"
 private const val P_DANMAKU_BOTTOM_FLOAT = "danmaku.bottomToFloat"
 private const val P_SCREENSHOT_TO_CLIPBOARD = "video.screenshotToClipboard"
 private const val P_BACKGROUND_AUDIO = "audio.backgroundAudio"
+private const val P_CLICK = "gesture.click"
+private const val P_PAUSE_AUTO_LOCK = "play.pauseAutoLock"
+private const val P_SCREENSHOT_FORMAT = "video.screenshotFormat"
+private const val P_JPEG_QUALITY = "video.jpegQuality"
+private const val P_SWITCH_BLACKOUT = "video.switchBlackout"
 
 /**
  * The same three modes the iOS side offers, mapped onto the view's own resize modes
@@ -232,6 +293,7 @@ fun PlayerScreen(
     startPositionMs: Long,
     sourceUri: Uri?,
     queue: List<Pair<String, String>>,
+    cloudDrive: Boolean = false,
     onFinish: () -> Unit,
     onPlayNext: (String, String) -> Unit = { _, _ -> }
 ) {
@@ -289,12 +351,18 @@ fun PlayerScreen(
     val skipIntroSeconds = remember { store.prefInt(P_SKIP_INTRO, 0) }
     val showSkipTip = remember { store.prefBool(P_SHOW_SKIP_TIP, true) }
     val showStartTitle = remember { store.prefBool(P_SHOW_START_TITLE, true) }
+    val showCloudThrottleTip = remember { store.prefBool(P_SHOW_CLOUD_THROTTLE_TIP, true) }
     val autoFullScreen = remember { store.prefBool(P_AUTO_FULLSCREEN, false) }
     val bottomToFloat = remember { store.prefBool(P_DANMAKU_BOTTOM_FLOAT, false) }
     val screenshotToClipboard = remember {
         store.prefBool(P_SCREENSHOT_TO_CLIPBOARD, true)
     }
     val backgroundAudio = remember { store.prefBool(P_BACKGROUND_AUDIO, false) }
+    val clickAction = remember { store.prefString(P_CLICK, "playPause") }
+    val pauseAutoLock = remember { store.prefBool(P_PAUSE_AUTO_LOCK, true) }
+    val screenshotFormat = remember { store.prefString(P_SCREENSHOT_FORMAT, "jpg") }
+    val jpegQuality = remember { store.prefFloat(P_JPEG_QUALITY, 0.8f) }
+    val switchBlackout = remember { store.prefBool(P_SWITCH_BLACKOUT, true) }
     val floatingControls = remember {
         store.prefString("ui.controlBarStyle", "bottom") == "floating"
     }
@@ -312,6 +380,8 @@ fun PlayerScreen(
     val danmakuSpeed = remember { store.prefFloat(P_DANMAKU_SPEED, 0.5f).toDouble() }
     val danmakuArea = remember { store.prefFloat(P_DANMAKU_AREA, 0.15f).toDouble() }
     val danmakuSkipShort = remember { store.prefBool(P_DANMAKU_SKIP_SHORT, true) }
+    val danmakuFontName = remember { store.prefString(P_DANMAKU_FONT, "SF Pro") }
+    val danmakuConvert = remember { store.prefString(P_DANMAKU_CONVERT, "none") }
     val preloadMode = remember { store.prefString(P_PRELOAD_MODE, "none") }
     val audioEnhance = remember { store.prefBool(P_AUDIO_ENHANCE, true) }
     // Reported in the info panel; the actual downmix happens in the decoder graph.
@@ -347,9 +417,12 @@ fun PlayerScreen(
                 val resume = if (startPositionMs > 0L) startPositionMs
                 else if (resumeFromLast) store.savedPosition(url) else 0L
                 if (resume > 0L) controller.seekTo(resume)
-                // "开始播放提示标题"
-                if (showStartTitle && name.isNotBlank()) {
-                    hud = name
+                // "开始播放提示标题" and "网盘限速提示" share the one HUD line, so what
+                // the file is served from wins over the title.
+                hud = when {
+                    cloudDrive && showCloudThrottleTip -> "网盘限速，播放可能不流畅"
+                    showStartTitle && name.isNotBlank() -> name
+                    else -> null
                 }
                 // "播放视频自动进入全屏" — on a phone that means hiding the system
                 // bars, which is the only full screen this platform has.
@@ -413,11 +486,16 @@ fun PlayerScreen(
     }
 
     fun saveScreenshot(bitmap: android.graphics.Bitmap) {
+        // The format switch decides the bytes, so the name, the MIME type and the
+        // encoder all follow it rather than being fixed at PNG.
+        val png = screenshotFormat == "png"
+        val extension = if (png) "png" else "jpg"
+        val mime = if (png) "image/png" else "image/jpeg"
         val resolver = context.contentResolver
         val values = android.content.ContentValues().apply {
             put(android.provider.MediaStore.Images.Media.DISPLAY_NAME,
-                "senplay-" + System.currentTimeMillis() + ".png")
-            put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")
+                "senplay-" + System.currentTimeMillis() + "." + extension)
+            put(android.provider.MediaStore.Images.Media.MIME_TYPE, mime)
             put(android.provider.MediaStore.Images.Media.RELATIVE_PATH,
                 android.os.Environment.DIRECTORY_PICTURES + "/SenPlay")
         }
@@ -428,8 +506,11 @@ fun PlayerScreen(
             showHud("截图失败")
             return
         }
+        val format = if (png) android.graphics.Bitmap.CompressFormat.PNG
+        else android.graphics.Bitmap.CompressFormat.JPEG
+        val quality = if (png) 100 else (jpegQuality * 100f).toInt().coerceIn(1, 100)
         runCatching {
-            resolver.openOutputStream(uri)?.use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            resolver.openOutputStream(uri)?.use { bitmap.compress(format, quality, it) }
         }.onFailure {
             showHud("截图失败")
             return
@@ -599,6 +680,26 @@ fun PlayerScreen(
         controlsVisible = false
     }
 
+    // "暂停后自动锁屏": the screen has to stay awake while playing, and the switch
+    // decides what happens once paused — off keeps it awake through the pause too.
+    LaunchedEffect(isPlaying, pauseAutoLock) {
+        activity?.window?.let { window ->
+            if (isPlaying || !pauseAutoLock) {
+                window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            } else {
+                window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            activity?.window?.clearFlags(
+                android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+            )
+        }
+    }
+
     DisposableEffect(player) {
         onDispose {
             if (store.rememberProgressEnabled && player.duration > 0) {
@@ -630,30 +731,44 @@ fun PlayerScreen(
         hud = if (deltaSeconds >= 0) "+${deltaSeconds}s" else "${deltaSeconds}s"
     }
 
+    /**
+     * The one place a configurable gesture is carried out, so the single tap, the
+     * three double-tap zones and the keyboard all agree on what an action means.
+     * "fullscreen" has nothing to toggle on a phone, and brightness, volume and speed
+     * are drag or hold gestures; both fall back to the control bar, which is where
+     * those controls actually live.
+     */
+    fun performGesture(action: String) {
+        when (action) {
+            "playPause" -> {
+                if (player.isPlaying) player.pause() else player.play()
+                isPlaying = !isPlaying
+            }
+            "forward" -> seekBy(forwardSeconds)
+            "backward" -> seekBy(-backwardSeconds)
+            "fullscreen" -> showHud("播放器已全屏")
+            "toggleControls", "brightness", "volume", "speed" -> {
+                controlsVisible = !controlsVisible
+            }
+            else -> Unit
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
             .pointerInput(Unit) {
                 detectTapGestures(
-                    onTap = {
-                        controlsVisible = !controlsVisible
-                    },
+                    onTap = { performGesture(clickAction) },
                     onDoubleTap = { offset: Offset ->
-                        val zone = when {
-                            offset.x < size.width / 3f -> doubleLeft
-                            offset.x > size.width * 2f / 3f -> doubleRight
-                            else -> doubleCenter
-                        }
-                        when (zone) {
-                            "playPause" -> {
-                                if (player.isPlaying) player.pause() else player.play()
-                                isPlaying = !isPlaying
+                        performGesture(
+                            when {
+                                offset.x < size.width / 3f -> doubleLeft
+                                offset.x > size.width * 2f / 3f -> doubleRight
+                                else -> doubleCenter
                             }
-                            "forward" -> seekBy(forwardSeconds)
-                            "backward" -> seekBy(-backwardSeconds)
-                            else -> controlsVisible = !controlsVisible
-                        }
+                        )
                     }
                 )
             }
@@ -813,7 +928,9 @@ fun PlayerScreen(
                     this.player = player
                     useController = false
                     setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
-                    setKeepContentOnPlayerReset(true)
+                    // "切换视频时黑屏" — 开启时不保留上一帧。Media3 的默认值就是
+                    // false，这里让它跟着偏好走，关掉开关才看得出区别。
+                    setKeepContentOnPlayerReset(!switchBlackout)
                 }
             }
         )
@@ -839,6 +956,8 @@ fun PlayerScreen(
                 area = danmakuArea,
                 blockedKeywords = blockedKeywords,
                 bottomFloats = bottomToFloat,
+                fontName = danmakuFontName,
+                convert = danmakuConvert,
                 modifier = Modifier.fillMaxSize()
             )
         }

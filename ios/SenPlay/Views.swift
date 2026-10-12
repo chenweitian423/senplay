@@ -7,6 +7,23 @@ struct HomeView: View {
     /// The accent the whole app tints with. Read here rather than in each screen
     /// because @AppStorage is per-view and this is the one view they all sit under.
     @AppStorage("pref.general.themeColor") private var themeColor = "blue"
+    @AppStorage("pref.general.defaultModule") private var defaultModule = "files"
+    /// "默认启动模块" is about where the app opens, so the choice is read once at
+    /// construction rather than moving the tab under the viewer when it changes.
+    @State private var selection: Int = HomeView.tabIndex(
+        UserDefaults.standard.string(forKey: "pref.general.defaultModule") ?? "files"
+    )
+
+    /// The reference app's module names, mapped onto this app's five tabs. "文件" is
+    /// the local library, which is tab 0 here.
+    private static func tabIndex(_ module: String) -> Int {
+        switch module {
+        case "servers": return 1
+        case "iptv": return 2
+        case "record": return 3
+        default: return 0
+        }
+    }
 
     private var accent: Color {
         switch themeColor {
@@ -21,21 +38,26 @@ struct HomeView: View {
     }
 
     var body: some View {
-        TabView {
+        TabView(selection: $selection) {
             LibraryView(store: store, pending: $pending)
                 .tabItem { Label("媒体库", systemImage: "film.stack") }
+                .tag(0)
 
             ServersView(store: store, pending: $pending)
                 .tabItem { Label("服务器", systemImage: "server.rack") }
+                .tag(1)
 
             IPTVScreen(pending: $pending)
                 .tabItem { Label("IPTV", systemImage: "tv") }
+                .tag(2)
 
             HistoryView(store: store, pending: $pending)
                 .tabItem { Label("记录", systemImage: "clock.arrow.circlepath") }
+                .tag(3)
 
             PreferencesView()
                 .tabItem { Label("设置", systemImage: "gearshape") }
+                .tag(4)
         }
         .tint(accent)
     }

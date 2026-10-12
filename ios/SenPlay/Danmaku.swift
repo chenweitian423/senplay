@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 
 // MARK: - Model
 
@@ -124,6 +125,11 @@ struct DanmakuOverlay: View {
     var blockedKeywords: [String] = []
     /// "底部弹幕转为浮动" — the reference app lets bottom comments scroll instead.
     var bottomFloats: Bool = false
+    /// "弹幕字体". "SF Pro" is what the reference app calls the system face, so it
+    /// and an empty field both mean "whatever the system uses".
+    var fontName: String = "SF Pro"
+    /// "中文简繁转换" — "none" / "hans" / "hant".
+    var convert: String = "none"
 
     private struct Lane {
         var busyUntil: Double = 0
@@ -164,8 +170,8 @@ struct DanmakuOverlay: View {
                 ForEach(visible, id: \.item.id) { entry in
                     let elapsed = currentTime - entry.item.time
                     let progress = min(max(elapsed / (6.0 * speed), 0), 1)
-                    Text(entry.item.text)
-                        .font(.system(size: fontSize, weight: .semibold))
+                    Text(converted(entry.item.text))
+                        .font(face(size: fontSize))
                         .foregroundColor(Color(rgb: entry.item.color))
                         .shadow(color: .black.opacity(0.75), radius: 1.5)
                         .fixedSize()
@@ -180,6 +186,30 @@ struct DanmakuOverlay: View {
             }
         }
         .allowsHitTesting(false)
+    }
+
+    /// A named face when the system has one, otherwise the system font. A viewer who
+    /// types a name iOS does not know gets readable comments rather than none.
+    private func face(size: Double) -> Font {
+        let name = fontName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty, name != "SF Pro", UIFont(name: name, size: size) != nil else {
+            return .system(size: size, weight: .semibold)
+        }
+        return .custom(name, size: size)
+    }
+
+    /// The conversion runs on the way to the screen, not on the items: keywords and
+    /// lane packing stay on the text the server sent, which is also what the viewer
+    /// typed into the block list.
+    private func converted(_ text: String) -> String {
+        switch convert {
+        case "hans":
+            return text.applyingTransform(StringTransform("Traditional-Simplified"), reverse: false) ?? text
+        case "hant":
+            return text.applyingTransform(StringTransform("Simplified-Traditional"), reverse: false) ?? text
+        default:
+            return text
+        }
     }
 }
 

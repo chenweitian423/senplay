@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -41,8 +42,17 @@ fun DanmakuOverlay(
     blockedKeywords: List<String> = emptyList(),
     /** "底部弹幕转为浮动" — the reference app lets bottom comments scroll instead. */
     bottomFloats: Boolean = false,
+    /** "弹幕字体". "SF Pro" is the reference app's name for the system face. */
+    fontName: String = "SF Pro",
+    /** "中文简繁转换" — "none" / "hans" / "hant". */
+    convert: String = "none",
     modifier: Modifier = Modifier
 ) {
+    // Font and conversion are resolved once per change rather than per comment: the
+    // surface redraws while comments are on screen.
+    val family = remember(fontName) { danmakuFamily(fontName) }
+    val translation = remember(convert) { hanTransliterator(convert) }
+
     if (items.isEmpty()) return
 
     val travel = 6.0 * speed
@@ -100,9 +110,10 @@ fun DanmakuOverlay(
                 val yPx: Float = with(density) { yDp.toPx() }
 
                 Text(
-                    text = entry.item.text,
+                    text = translation?.transliterate(entry.item.text) ?: entry.item.text,
                     color = Color(0xFF000000.toInt() or entry.item.color),
                     fontSize = fontSize.sp,
+                    fontFamily = family,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     style = TextStyle(
@@ -115,4 +126,30 @@ fun DanmakuOverlay(
             }
         }
     }
+}
+
+/**
+ * "弹幕字体". "SF Pro" is what the reference app calls the system face, and a name
+ * this device does not have falls back to the platform default rather than showing
+ * nothing at all.
+ */
+private fun danmakuFamily(name: String): FontFamily {
+    val trimmed = name.trim()
+    if (trimmed.isEmpty() || trimmed == "SF Pro") return FontFamily.Default
+    return FontFamily(android.graphics.Typeface.create(trimmed, android.graphics.Typeface.NORMAL))
+}
+
+/**
+ * "中文简繁转换" goes through the platform's ICU transliterator — the same data iOS
+ * reaches with CFStringTransform — so both ends convert the same way and neither
+ * carries a hand-maintained character table. A device missing the rule keeps the
+ * original text instead of dropping the comment.
+ */
+private fun hanTransliterator(mode: String): android.icu.text.Transliterator? {
+    val id = when (mode) {
+        "hans" -> "Traditional-Simplified"
+        "hant" -> "Simplified-Traditional"
+        else -> return null
+    }
+    return runCatching { android.icu.text.Transliterator.getInstance(id) }.getOrNull()
 }

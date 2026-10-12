@@ -672,7 +672,8 @@ struct ServerBrowserView: View {
                 errorText = "无法生成 S3 下载地址"
                 return
             }
-            pending = PlayRequest(url: url, name: entry.name, queue: siblings)
+            pending = PlayRequest(url: url, name: entry.name, queue: siblings,
+                                  isCloudDrive: true)
             return
         }
         if server.type == "plex" {

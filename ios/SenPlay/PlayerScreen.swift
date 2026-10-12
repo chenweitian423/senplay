@@ -1,6 +1,7 @@
 import AVKit
 import CoreMedia
 import KSPlayer
+import Photos
 import SwiftUI
 import UIKit
 
@@ -510,6 +511,8 @@ struct PlayerScreen: View {
     @AppStorage(PrefKey.danmakuSpeed) private var danmakuSpeed = 0.5
     @AppStorage(PrefKey.danmakuArea) private var danmakuArea = 0.15
     @AppStorage(PrefKey.danmakuSkipShort) private var danmakuSkipShort = true
+    @AppStorage(PrefKey.danmakuFont) private var danmakuFontName = "SF Pro"
+    @AppStorage("pref.danmaku.convert") private var danmakuConvert = "none"
     @AppStorage("pref.ui.showOSD") private var showOSD = false
     @AppStorage("pref.play.rememberSpeed") private var rememberSpeed = true
     @AppStorage("pref.play.lastSpeed") private var lastSpeed = 1.0
@@ -548,6 +551,13 @@ struct PlayerScreen: View {
     /// Declared here as well as in the settings screen: a preference is read where it
     /// is used, and the two views do not share storage declarations.
     @AppStorage(PrefKey.screenshotToClipboard) private var screenshotToClipboard = true
+    @AppStorage(PrefKey.clickAction) private var clickAction = GestureAction.playPause.rawValue
+    @AppStorage(PrefKey.pauseAutoLock) private var pauseAutoLock = true
+    @AppStorage(PrefKey.useSystemProxy) private var useSystemProxy = true
+    @AppStorage(PrefKey.screenshotFormat) private var screenshotFormat = "jpg"
+    @AppStorage(PrefKey.switchBlackout) private var switchBlackout = true
+    @AppStorage(PrefKey.showCloudThrottleTip) private var showCloudThrottleTip = true
+    @AppStorage("pref.video.decodeThreads") private var decodeThreads = 8
     @AppStorage("pref.gesture.longPressLeftSpeed") private var longPressLeftSpeed = 0.5
     @AppStorage("pref.gesture.longPressRightSpeed") private var longPressRightSpeed = 2.0
     @State private var hud: PlayerHUD?
@@ -561,6 +571,9 @@ struct PlayerScreen: View {
     @State private var keyRouter = KeyCommandRouter()
     @State private var stats: OSDStats?
     @State private var countdown: Int = 0
+    /// "切换视频时黑屏": covers the hand-off to the next item so the last frame of
+    /// the outgoing one is not what the viewer sees while the host swaps screens.
+    @State private var blackout = false
 
     private let speeds: [Float] = [0.5, 0.75, 1, 1.25, 1.5, 2, 3]
 
@@ -607,7 +620,9 @@ struct PlayerScreen: View {
                                    speed: danmakuSpeed,
                                    area: danmakuArea,
                                    blockedKeywords: blockedKeywords,
-                                   bottomFloats: bottomToFloat)
+                                   bottomFloats: bottomToFloat,
+                                   fontName: danmakuFontName,
+                                   convert: danmakuConvert)
                         .ignoresSafeArea()
                 }
 
@@ -668,6 +683,10 @@ struct PlayerScreen: View {
                 if let next = upNext {
                     upNextCard(next)
                 }
+
+                if blackout {
+                    Color.black.ignoresSafeArea()
+                }
             }
         }
         .statusBar(hidden: true)
@@ -678,6 +697,7 @@ struct PlayerScreen: View {
         }
         .onAppear(perform: start)
         .onDisappear(perform: finish)
+        .onChange(of: isPlaying) { _ in updateIdleTimer() }
         // Polled once a second: the kernel publishes on every frame, and the overlay
         // only needs to stay readable.
         .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
@@ -729,7 +749,9 @@ struct PlayerScreen: View {
                                     text: String(format: "%.2fx", longPressSpeedRate))
                 }
         )
-        .onTapGesture { toggleControls() }
+        // "左键单击" on the desktop is the single tap here; the default is play/pause,
+        // which is why the settings row reads that way.
+        .onTapGesture { perform(clickAction) }
     }
 
     private func handleDrag(_ value: DragGesture.Value, size: CGSize) {
@@ -1299,6 +1321,10 @@ struct PlayerScreen: View {
         guard let next = upNext else { return }
         upNext = nil
         countdown = 0
+        // The host swaps the presented screen; until it does, the outgoing item is
+        // still on screen and still playing. The switch decides whether the viewer
+        // sees that or a black frame.
+        if switchBlackout { blackout = true }
         let seeded = PlayRequest(
             url: next.url,
             name: next.name,
@@ -1352,6 +1378,12 @@ struct PlayerScreen: View {
         scheduleHUDClear()
     }
 
+    /// "暂停后自动锁屏": the screen has to stay awake while playing, and the switch
+    /// decides what happens once paused — off keeps it awake through the pause too.
+    private func updateIdleTimer() {
+        UIApplication.shared.isIdleTimerDisabled = isPlaying || !pauseAutoLock
+    }
+
     private func toggleControls() {
         withAnimation(.easeInOut(duration: 0.18)) { controlsVisible.toggle() }
         if controlsVisible { scheduleHide() }
@@ -1397,15 +1429,26 @@ struct PlayerScreen: View {
         return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%02d:%02d", m, s)
     }
 
+    /// The format switch decides the bytes that leave the player: JPEG at the quality
+    /// the video tab sets, or PNG when the viewer wants no loss. Encoding here rather
+    /// than handing the image over keeps the two ends of that switch honest.
     private func captureFrame() {
         guard let image = kernel?.capture() else {
             toast = "截图失败"
             scheduleToastClear()
             return
         }
-        UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
-        if screenshotToClipboard {
-            UIPasteboard.general.image = image
+        let data = screenshotFormat == "png"
+            ? image.pngData()
+            : image.jpegData(compressionQuality: CGFloat(jpegQuality))
+        if let data {
+            PHPhotoLibrary.shared().performChanges {
+                PHAssetCreationRequest.forAsset()
+                    .addResource(with: .photo, data: data, options: nil)
+            }
+            if screenshotToClipboard {
+                UIPasteboard.general.image = image
+            }
         }
         toast = screenshotToClipboard ? "已保存截图并复制" : "已保存截图"
         scheduleToastClear()
@@ -1419,6 +1462,13 @@ struct PlayerScreen: View {
         let options = KSOptions()
         options.isAccurateSeek = accurateSeek
         options.hardwareDecode = preferHardwareDecode
+        // "软件解码线程" — only the FFmpeg path has threads to set. AVFoundation decodes
+        // inside the system framework and has nothing to configure here, which is why
+        // the settings row calls it 软件解码线程.
+        options.decoderOptions["threads"] = String(max(1, decodeThreads))
+        // The FFmpeg path opens its own sockets, so it never sees the system proxy
+        // unless the kernel hands it over. The AVFoundation path ignores this.
+        KSOptions.useSystemHTTPProxy = useSystemProxy
         options.userAgent = request.userAgent ?? "SenPlay/1.1 (iOS)"
         // Server-issued headers (Emby's X-Emby-Authorization, referers) go in through
         // the kernel's own header channel so they reach both the AVFoundation and the
@@ -1531,6 +1581,14 @@ struct PlayerScreen: View {
         )
 
         scheduleHide()
+        updateIdleTimer()
+
+        // "网盘限速提示" — object storage is rate limited per account, so a stutter
+        // here is expected rather than a fault in the file.
+        if showCloudThrottleTip, request.isCloudDrive {
+            toast = "网盘限速，播放可能不流畅"
+            scheduleToastClear()
+        }
     }
 
     /// Pulls comments for this title from the first configured endpoint. Skipped for
@@ -1585,6 +1643,7 @@ struct PlayerScreen: View {
     private func finish() {
         subtitles.stop()
         NowPlaying.shared.deactivate()
+        UIApplication.shared.isIdleTimerDisabled = false
         guard let kernel else { return }
         let seconds = kernel.currentTime
         let total = kernel.totalTime

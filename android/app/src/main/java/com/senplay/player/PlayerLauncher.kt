@@ -14,7 +14,8 @@ object PlayerLauncher {
                 subtitle = request.subtitleUrl,
                 userAgent = request.userAgent,
                 positionMs = request.positionMs,
-                queue = request.queue
+                queue = request.queue,
+                cloudDrive = request.isCloudDrive
             )
         )
     }

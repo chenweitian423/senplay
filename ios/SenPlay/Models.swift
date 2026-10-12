@@ -154,4 +154,8 @@ struct PlayRequest: Equatable {
     /// Siblings of the current item, so the player can advance without the host
     /// view having to rebuild the list.
     var queue: [QueueItem] = []
+    /// "网盘限速提示" only applies to object-storage playback, so the source has to
+    /// travel with the request — the URL itself is a signed link with nothing left
+    /// in it that says where it came from.
+    var isCloudDrive: Bool = false
 }

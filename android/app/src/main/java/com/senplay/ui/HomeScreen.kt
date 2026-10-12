@@ -28,11 +28,25 @@ import com.senplay.player.PlayerLauncher
 
 private data class Tab(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
 
+/**
+ * "默认启动模块" — the reference app's module names, mapped onto this app's five
+ * tabs. "文件" is the local library, which is tab 0 here and has no setting entry.
+ */
+private fun initialTab(store: LibraryStore): Int =
+    when (store.prefString("general.defaultModule", "files")) {
+        "servers" -> 1
+        "iptv" -> 2
+        "record" -> 3
+        else -> 0
+    }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(store: LibraryStore) {
     val context = LocalContext.current
-    var tab by remember { mutableStateOf(0) }
+    // "默认启动模块" is about where the app opens, so it is read once here rather than
+    // moving the tab whenever the setting changes.
+    var tab by remember { mutableStateOf(initialTab(store)) }
     val tabs = listOf(
         Tab("媒体库", Icons.Filled.VideoLibrary),
         Tab("服务器", Icons.Filled.Dns),
