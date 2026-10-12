@@ -273,7 +273,7 @@ private const val P_DANMAKU_SKIP_SHORT = "danmaku.skipShort"
 private const val P_DANMAKU_FONT = "danmaku.font"
 private const val P_DANMAKU_CONVERT = "danmaku.convert"
 private const val P_PRELOAD_MODE = "play.preloadMode"
-private const val P_AUDIO_ENHANCE = "audio.enhance"
+private const val P_AUDIO_ENHANCE_PERCENT = "audio.enhancePercent"
 private const val P_MULTI_CHANNEL = "audio.multiChannel"
 private const val P_SHOW_OSD = "ui.showOSD"
 private const val P_SHOW_SKIP_TIP = "ui.showSkipTip"
@@ -454,7 +454,6 @@ fun PlayerScreen(
     val danmakuFontName = remember { store.prefString(P_DANMAKU_FONT, "SF Pro") }
     val danmakuConvert = remember { store.prefString(P_DANMAKU_CONVERT, "none") }
     val preloadMode = remember { store.prefString(P_PRELOAD_MODE, "none") }
-    val audioEnhance = remember { store.prefBool(P_AUDIO_ENHANCE, true) }
     // Reported in the info panel; the actual downmix happens in the decoder graph.
     val multiChannel = remember { store.prefBool(P_MULTI_CHANNEL, false) }
     @Suppress("UNUSED_VARIABLE") val multiChannelNotice = multiChannel

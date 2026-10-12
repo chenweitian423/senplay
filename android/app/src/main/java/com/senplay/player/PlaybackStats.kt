@@ -66,10 +66,15 @@ fun analyticsListener(): AnalyticsListener = object : AnalyticsListener {
  * Android's own gain stage. The counterpart of the iOS volume filter, and what
  * "音量到达 100% 后继续放大" actually means.
  */
-class GainStage(sessionId: Int) {
+/** "音频增强倍数": LoudnessEnhancer takes millibels, and 200% is twice the amplitude
+ * — 20·log10(2)·100 ≈ 602, which is the +6 dB this used to hard-code. */
+private fun percentToMillibels(percent: Float): Int =
+    (20.0 * kotlin.math.log10((percent / 100.0).coerceAtLeast(0.01)) * 100).toInt()
+
+class GainStage(sessionId: Int, percent: Float = 200f) {
     private val enhancer: LoudnessEnhancer? = runCatching {
         LoudnessEnhancer(sessionId).apply {
-            setTargetGain(600) // +6 dB
+            setTargetGain(percentToMillibels(percent))
             enabled = true
         }
     }.getOrNull()

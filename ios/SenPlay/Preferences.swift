@@ -534,6 +534,7 @@ private struct AudioPrefs: View {
     @AppStorage(PrefKey.rememberAudioTrack) private var rememberTrack = true
     @AppStorage(PrefKey.audioFirstLanguage) private var firstLanguage = "none"
     @AppStorage(PrefKey.audioEnhance) private var enhance = true
+    @AppStorage(PrefKey.audioEnhancePercent) private var enhancePercent = 200.0
     @AppStorage(PrefKey.multiChannel) private var multiChannel = false
     @AppStorage("pref.audio.globalDelayMs") private var globalDelay = 0
     @AppStorage("pref.audio.backgroundAudio") private var backgroundAudio = false
@@ -550,6 +551,12 @@ private struct AudioPrefs: View {
             }
             Section {
                 Toggle("音频增强", isOn: $enhance)
+                HStack {
+                    Text("音频增强倍数")
+                    Slider(value: $enhancePercent, in: 100...400, step: 10)
+                    Text("\(Int(enhancePercent))%")
+                        .font(.footnote).foregroundColor(.secondary)
+                }
                 Text("音量到达 100% 后继续放大音量")
                     .font(.footnote).foregroundColor(.secondary)
             }

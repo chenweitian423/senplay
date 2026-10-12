@@ -246,6 +246,7 @@ fun SettingsScreen(store: LibraryStore) {
             listOf("none" to "默认", "zh" to "中文", "en" to "英语", "ja" to "日语", "ko" to "韩语"), "none"
         )
         PrefSwitch(store, "audio.enhance", "音频增强", "音量到达 100% 后继续放大音量", true)
+        PrefSlider(store, "audio.enhancePercent", "音频增强倍数", 100f, 400f, 10f, 200f, "%")
         PrefChoice(
             store, "audio.backgroundAudio", "后台播放",
             listOf("on" to "始终", "wifi" to "仅 Wi-Fi", "off" to "关闭"), "on"

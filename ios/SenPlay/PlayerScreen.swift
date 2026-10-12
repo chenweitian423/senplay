@@ -71,6 +71,9 @@ enum PrefKey {
     static let rememberAudioTrack = "pref.audio.rememberTrack"
     static let audioFirstLanguage = "pref.audio.firstLanguage"
     static let audioEnhance = "pref.audio.enhance"
+    /// "音频增强倍数" — how far the gain filter is pushed. 200% is the twice-amplitude
+    /// the switch alone used to mean.
+    static let audioEnhancePercent = "pref.audio.enhancePercent"
     static let multiChannel = "pref.audio.multiChannel"
     // 字幕
     static let rememberSubtitleTrack = "pref.subtitle.rememberTrack"
@@ -594,6 +597,7 @@ struct PlayerScreen: View {
     @AppStorage("pref.play.lastSpeed") private var lastSpeed = 1.0
     @AppStorage(PrefKey.preloadMode) private var preloadMode = "none"
     @AppStorage(PrefKey.audioEnhance) private var audioEnhance = true
+    @AppStorage(PrefKey.audioEnhancePercent) private var audioEnhancePercent = 200.0
     @AppStorage(PrefKey.multiChannel) private var multiChannel = false
     @AppStorage("pref.video.upscaling") private var upscaling = false
     @AppStorage("pref.video.hdrMetadata") private var hdrMetadata = true
@@ -1623,8 +1627,9 @@ struct PlayerScreen: View {
         // Audio. The gain filter is what "音量到达 100% 后继续放大" actually means;
         // multichannel downmix is the opposite direction and is left off by default
         // because it can drop the dialogue on stereo devices.
-        if audioEnhance {
-            options.audioFilters.append("volume=2.0")
+        if audioEnhance, audioEnhancePercent > 100 {
+            let ratio = audioEnhancePercent / 100
+            options.audioFilters.append(String(format: "volume=%.2f", ratio))
         }
         if multiChannel {
             options.audioFilters.append("pan=stereo|c0=c0|c1=c1")

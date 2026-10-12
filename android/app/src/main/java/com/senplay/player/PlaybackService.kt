@@ -110,7 +110,8 @@ class PlaybackService : MediaSessionService() {
         // The gain stage needs the player's audio session, so it is attached here
         // rather than in the activity.
         if (store.prefBool("audio.enhance", true)) {
-            gain = GainStage(player.audioSessionId)
+            gain = GainStage(player.audioSessionId,
+                store.prefFloat("audio.enhancePercent", 200f))
         }
 
         session = MediaSession.Builder(this, player)
