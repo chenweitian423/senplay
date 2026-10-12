@@ -136,10 +136,15 @@ jobs:
           path: ios/artifacts/*
 
       - name: Create release
-        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ios-unsigned
-          name: SenPlay iOS unsigned IPA
-          body: "未签名 IPA，需要用 AltStore / Sideloadly / TrollStore 自行签名后安装。"
+          # The tag that triggered this run, so the APK job's files land in the same
+          # release instead of a separate per-platform one.
+          tag_name: ${{ github.ref_name }}
+          name: SenPlay ${{ github.ref_name }}
+          body: |
+            **iOS**：未签名 IPA，需要 AltStore / Sideloadly / TrollStore 自行签名后安装。
+            **Android**：APK 由同一个版本号触发的那次构建上传到本 release。
+          generate_release_notes: true
           files: ios/artifacts/*
