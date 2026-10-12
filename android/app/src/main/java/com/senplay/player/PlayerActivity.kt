@@ -100,6 +100,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.ui.PlayerView
+import androidx.media3.ui.SubtitleView
 import com.senplay.core.Http
 import com.senplay.core.DanmakuItem
 import com.senplay.ui.OsdStats
@@ -276,6 +277,9 @@ private const val P_REMEMBER_ZOOM = "gesture.rememberZoomSize"
 private const val P_ZOOM = "gesture.zoom"
 private const val P_REMEMBER_AUDIO_TRACK = "audio.rememberTrack"
 private const val P_REMEMBER_SUBTITLE_TRACK = "subtitle.rememberTrack"
+private const val P_SWITCH_MEDIA_BUTTON = "ui.switchMediaButton"
+private const val P_SUBTITLE_SCALE = "subtitle.scale"
+private const val P_SUBTITLE_MASK = "subtitle.mask"
 
 /**
  * The same three modes the iOS side offers, mapped onto the view's own resize modes
@@ -346,6 +350,9 @@ fun PlayerScreen(
     val rememberZoom = remember { store.prefBool(P_REMEMBER_ZOOM, true) }
     val rememberAudioTrack = remember { store.prefBool(P_REMEMBER_AUDIO_TRACK, true) }
     val rememberSubtitleTrack = remember { store.prefBool(P_REMEMBER_SUBTITLE_TRACK, true) }
+    val switchMediaButton = remember { store.prefBool(P_SWITCH_MEDIA_BUTTON, true) }
+    val subtitleScale = remember { store.prefFloat(P_SUBTITLE_SCALE, 1f) }
+    val subtitleMask = remember { store.prefBool(P_SUBTITLE_MASK, false) }
     /** "记住缩放大小" — the pinch scale comes back with the next file. */
     var zoom by remember {
         mutableStateOf(if (rememberZoom) store.prefFloat(P_ZOOM, 1f).coerceIn(0.6f, 3f) else 1f)
@@ -678,6 +685,18 @@ fun PlayerScreen(
             (player.duration ?: 0L).coerceAtLeast(0L))
         player.stop()
         onPlayNext(next.first, next.second)
+    }
+
+    /** "切换媒体按钮" — moves to the next item in the queue, on demand rather than by
+     * countdown. Reports when there is nothing to move to instead of doing nothing. */
+    fun switchToNextMedia() {
+        val index = queue.indexOfFirst { it.first == url }
+        val next = queue.getOrNull(index + 1)
+        if (index < 0 || next == null) {
+            showHud("队列中没有下一个")
+            return
+        }
+        advanceToNext(next)
     }
 
     fun beginCountdown() {
@@ -1044,6 +1063,19 @@ fun PlayerScreen(
                     // "切换视频时黑屏" — 开启时不保留上一帧。Media3 的默认值就是
                     // false，这里让它跟着偏好走，关掉开关才看得出区别。
                     setKeepContentOnPlayerReset(!switchBlackout)
+                    subtitleView?.let { captions ->
+                        // "大小缩放[主]": SubtitleView sizes its text as a fraction of its
+                        // own height, so the setting multiplies the platform default.
+                        captions.setFractionalTextSize(
+                            SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * subtitleScale
+                        )
+                        // "字幕防遮挡" — only the floating bar sits over the picture, so
+                        // that is the case the switch describes.
+                        captions.setBottomPaddingFraction(
+                            if (subtitleMask && floatingControls) 0.20f
+                            else SubtitleView.DEFAULT_BOTTOM_PADDING_FRACTION
+                        )
+                    }
                 }
             }
         )
@@ -1243,8 +1275,16 @@ fun PlayerScreen(
                                 Icon(Icons.Filled.FastForward, contentDescription = "快进", tint = Color.White)
                             }
                         }
-                        IconButton(onClick = { showHud("切换媒体") }) {
-                            Icon(Icons.Filled.SkipNext, contentDescription = "下一个", tint = Color.White)
+                        // "切换媒体按钮". The button used to report "切换媒体" and do
+                        // nothing at all, which is worse than not drawing it.
+                        if (switchMediaButton) {
+                            IconButton(onClick = { switchToNextMedia() }) {
+                                Icon(
+                                    Icons.Filled.SkipNext,
+                                    contentDescription = "下一个",
+                                    tint = Color.White
+                                )
+                            }
                         }
 
                         Spacer(modifier = Modifier.weight(1f))

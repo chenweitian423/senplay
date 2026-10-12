@@ -136,6 +136,9 @@ struct LibraryView: View {
     @State private var newURL = ""
     @State private var newTitle = ""
     @State private var localFiles: [URL] = []
+    /// "视频预览图时间" — where in a local file the row's still is taken from. The
+    /// crop mode belongs to the still itself and is read where it is drawn.
+    @AppStorage("pref.list.previewPosition") private var previewPercent = 10
 
     var body: some View {
         NavigationView {
@@ -179,7 +182,10 @@ struct LibraryView: View {
                                 }
                             )
                         } label: {
-                            Text(file.lastPathComponent)
+                            HStack(spacing: 12) {
+                                LocalThumbnail(file: file, percent: previewPercent)
+                                Text(file.lastPathComponent)
+                            }
                         }
                     }
                 }
@@ -380,5 +386,76 @@ struct SettingsView: View {
             .navigationTitle("设置")
         }
         .navigationViewStyle(.stack)
+    }
+}
+
+// MARK: - local file thumbnails
+
+/// The still on a local file's row.
+///
+/// "视频预览图时间" says where in the file the frame comes from, as a percentage. The
+/// reference app spells out that 0 means "do not generate one"
+/// (`0NotGeneratingPreviewImage`), which is why a zero draws the icon rather than
+/// asking for a frame at the very start.
+struct LocalThumbnail: View {
+    let file: URL
+    let percent: Int
+
+    @AppStorage("pref.list.fillThumbnail") private var fillThumbnail = true
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: fillThumbnail ? .fill : .fit)
+            } else {
+                Image(systemName: "film")
+                    .foregroundColor(.secondary)
+            }
+        }
+        .frame(width: 46, height: 66)
+        .task(id: file) {
+            image = await LocalThumbnailStore.shared.frame(for: file, percent: percent)
+        }
+    }
+}
+
+/// Generates and caches one frame per file.
+///
+/// The work happens off the main thread — a file has to be opened and seeked — and the
+/// result is cached by path and percentage, because otherwise every scroll back to the
+/// top would re-open every file in the folder.
+final class LocalThumbnailStore {
+    static let shared = LocalThumbnailStore()
+
+    private let cache = NSCache<NSString, UIImage>()
+    private let queue = DispatchQueue(label: "com.senplay.thumbnails", qos: .utility)
+
+    func frame(for file: URL, percent: Int) async -> UIImage? {
+        guard percent > 0 else { return nil }
+        let key = "\(file.path)#\(percent)" as NSString
+        if let cached = cache.object(forKey: key) { return cached }
+
+        return await withCheckedContinuation { continuation in
+            queue.async {
+                let asset = AVURLAsset(url: file)
+                let seconds = CMTimeGetSeconds(asset.duration)
+                guard seconds.isFinite, seconds > 0 else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                let generator = AVAssetImageGenerator(asset: asset)
+                generator.appliesPreferredTrackTransform = true
+                generator.maximumSize = CGSize(width: 184, height: 264)
+                let target = CMTime(seconds: seconds * Double(percent) / 100,
+                                    preferredTimescale: 600)
+                let frame = try? generator.copyCGImage(at: target, actualTime: nil)
+                let image = frame.map { UIImage(cgImage: $0) }
+                if let image { self.cache.setObject(image, forKey: key) }
+                continuation.resume(returning: image)
+            }
+        }
     }
 }

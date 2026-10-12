@@ -31,7 +31,13 @@ IOS_LITERAL = re.compile(r'@AppStorage\("([^"]+)"\)')
 # UserDefaults read directly rather than through a property wrapper. The browser
 # reads its display flags this way, and missing the pattern made keys that are
 # plainly wired look untouched.
-IOS_DIRECT = re.compile(r'(?:object|string|bool|integer|double|array|data)\(forKey:\s*"([^"]+)"\)')
+IOS_DIRECT = re.compile(
+    r'(?:object|string|bool|integer|double|array|data)\(forKey:\s*(?:"([^"]+)"|(\w+))\)'
+)
+# A storage key is often named by a constant instead of written out at the call site:
+# `private let sourcesKey = "iptv.sources"` … `data(forKey: sourcesKey)`. Reading only
+# literals made both IPTV keys look unread on iOS while Android was credited with them.
+IOS_STRING_CONST = re.compile(r'(?:static\s+|private\s+)*(?:let|var)\s+(\w+)\s*=\s*"([^"]+)"')
 ANDROID_DECL = re.compile(r'private const val (P_\w+) = "([^"]+)"')
 # A key can also be named inline at the call site, with no constant at all. Missing
 # these made the audit report three times that fewer keys were dead than really were.
@@ -42,6 +48,35 @@ ANDROID_ROW = re.compile(r'Pref(?:Switch|Choice|Slider|Text)\(\s*store,\s*"([^"]
 IOS_BINDING = re.compile(
     r'@AppStorage\((?:PrefKey\.(\w+)|"([^"]+)")\)\s*(?:private\s+)?var\s+(\w+)'
 )
+
+
+def settings_surface() -> set[str]:
+    """Keys a settings screen actually draws.
+
+    Everything else in the storage namespace — the IPTV channel lists, the server
+    list, the user agent — is user data. Android prefixes every constant it reads with
+    "pref." so the two sides can be compared, which meant those data keys arrived at
+    the report dressed as settings and showed up as a one-sided preference. Reporting
+    only what a settings screen names keeps the list about settings.
+    """
+    keys: set[str] = set()
+    name_to_key: dict[str, str] = {}
+    for path in sorted((ROOT / "ios" / "SenPlay").glob("*.swift")):
+        for name, key in IOS_DECL.findall(path.read_text(encoding="utf-8")):
+            name_to_key.setdefault(name, key)
+
+    settings_path = ROOT / "ios" / "SenPlay" / "Preferences.swift"
+    text = settings_path.read_text(encoding="utf-8")
+    keys |= set(IOS_LITERAL.findall(text))
+    for line in text.splitlines():
+        for name, key in name_to_key.items():
+            if re.search(r"PrefKey\." + re.escape(name) + r"\b", line):
+                keys.add(key)
+
+    android_path = (ROOT / "android" / "app" / "src" / "main" / "java" / "com" /
+                    "senplay" / "ui" / "SettingsScreen.kt")
+    keys |= {"pref." + key for key in ANDROID_ROW.findall(android_path.read_text(encoding="utf-8"))}
+    return keys
 
 
 def _is_use(line: str, variable: str) -> bool:
@@ -114,8 +149,11 @@ def scan(sources: list[pathlib.Path], decl_re: re.Pattern, settings_ui: set[str]
         text = path.read_text(encoding="utf-8")
         for key in IOS_LITERAL.findall(text):
             live.setdefault(key, set()).add(path.name)
-        for key in IOS_DIRECT.findall(text):
-            live.setdefault(key, set()).add(path.name)
+        constants = {name: value for name, value in IOS_STRING_CONST.findall(text)}
+        for literal, identifier in IOS_DIRECT.findall(text):
+            key = literal or constants.get(identifier, "")
+            if key:
+                live.setdefault(key, set()).add(path.name)
         for line in path.read_text(encoding="utf-8").splitlines():
             stripped = line.strip()
             if stripped.startswith("//") or stripped.startswith("*") or stripped.startswith("///"):
@@ -187,7 +225,8 @@ def main() -> int:
         k for k in set(ios) | set(android)
         if k.startswith("pref.") and "$" not in k and "\\(" not in k
     )
-    dead = [k for k in all_keys if not ios.get(k) and not android.get(k)]
+    surface = settings_surface()
+    dead = [k for k in all_keys if k in surface and not ios.get(k) and not android.get(k)]
 
     # Keys one platform reads and the other does not. The dead list above is an
     # intersection, so a key that only one side wired appears nowhere at all: that is
@@ -195,7 +234,10 @@ def main() -> int:
     # report looked clean. Single-sided is not automatically wrong — SMB and SFTP are
     # Android-only on purpose — but it has to be a decision rather than an omission,
     # so it belongs in the output.
-    one_sided = sorted(k for k in all_keys if bool(ios.get(k)) != bool(android.get(k)))
+    one_sided = sorted(
+        k for k in all_keys
+        if k in surface and bool(ios.get(k)) != bool(android.get(k))
+    )
 
     print(f"keys with a real read on iOS:     {sum(1 for k in ios if ios[k])}")
     print(f"keys with a real read on Android: {sum(1 for k in android if android[k])}")

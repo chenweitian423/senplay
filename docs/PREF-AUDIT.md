@@ -15,9 +15,9 @@
 
 ## 当前状态
 
-keys with a real read on iOS:     93
-keys with a real read on Android: 83
---- declared, shown in settings, read by nothing else (18) ---
+keys with a real read on iOS:     98
+keys with a real read on Android: 92
+--- declared, shown in settings, read by nothing else (17) ---
 
 ## 未生效的键
 
@@ -451,4 +451,61 @@ Android 此前既没有长按倍速也没有捏合缩放——设置页那两行
 编译期挡下来的两件事，都是同一条规则：**Kotlin 的局部函数必须先声明后使用**。
 `trackId` 写在 `selectTrack` 后面（报 unresolved reference），`rememberZoom` 写在用它
 的状态后面（同样报错）。另外 `private` 不能修饰局部函数。
+
+## 一次做完剩下的（round 45）
+
+**Android 的字幕样式和切换媒体按钮**：
+
+- `subtitle.scale` → `SubtitleView.setFractionalTextSize(默认比例 × 缩放)`。SubtitleView
+  按自身高度的比例排字，所以这个设置是乘数而不是像素值。
+- `subtitle.mask` → `SubtitleView.setBottomPaddingFraction()`，只在悬浮控制栏时抬高——
+  设置页那行小字写的就是「仅对悬浮控制栏生效」。
+- `ui.switchMediaButton` → 控制栏那个「下一个」按钮**原本点了只弹一句 HUD，什么都不做**
+  （`onClick = { showHud("切换媒体") }`）。现在它跳队列里的下一个，并受开关控制。
+  这是第 9 个「点下去什么都不发生」的控件。
+
+**预览图（`list.previewPosition`）两端都做了**。证据是完整的：`automaticallyGeneratePreview`、
+`updatePreviewImage`、`numberOfConcurrentThreadsInPreviewImage`、`previewImageThreads`、
+`prioritizeEmbeddedThumbnail`，加上 `0NotGeneratingPreviewImage`="0代表不自动生成缩略图"
+和 `mediaInfoTips`="部分设置对网盘文件列表无效"。实现按这两句话来：
+
+- 取帧位置 = 时长 × 百分比，**0 就是不生成**，行上留图标（iOS 用
+  `AVAssetImageGenerator`，Android 用 `MediaMetadataRetriever`）。
+- 只作用于**本地文件**列表。参考实现自己说这条设置在网盘列表上无效，所以没有为远程
+  文件开一条「先下载再抽帧」的路。
+- 帧按「路径 + 百分比」缓存，生成放在后台线程/IO 上：每滚回顶部就把文件夹里每个文件
+  重开一遍是不能接受的。
+
+**`list.showNewTag` 到此定案：不接**。「New」按什么算新，在 96 个 `k` 键名和 1255 条
+文案里都没有依据（只有 `dayWatch` / `hourWatch` 这类观看时间的相对显示）。
+`showRemaining` 那次教训已经证明按名字推断行为会错，所以它留在「等证据」一类。
+
+**`general.iCloudSync` 也定案：不做实现**。iOS 侧要走 `NSUbiquitousKeyValueStore`，
+需要 `ubiquity-kvstore-identifier` entitlement；本仓库的构建路径（CI 与本地都是
+`CODE_SIGNING_ALLOWED=NO`）提供不了它，本机也没有第二个 iCloud 账号能验证同步真的
+发生。写一段无法验证是否工作的代码，和画一个点了没反应的按钮是同一种问题。
+
+**`pref-audit.py` 的第九个盲点**：报告里混进了不是设置的存储键。`iptv.sources` /
+`iptv.channels` 是两端的**数据**（频道列表），但 Android 侧所有常量都会加上 `pref.`
+前缀以便比较，于是它们伪装成偏好键，出现在「只有一端接了」的列表里。现在报告只包含
+**设置页真的画出来的键**（iOS 侧扫 `Preferences.swift` 的 `@AppStorage` 与 `PrefKey`
+引用，Android 侧扫 `PrefSwitch` / `PrefChoice` / `PrefSlider` / `PrefText` 的行）。
+两条噪声消失，死键数不变——判据变窄没有误伤。
+
+## 单端剩下的 7 条，全部是无落点或平台差异（round 45 定案）
+
+| 键 | 为什么不动 |
+|---|---|
+| `gesture.longPressLeftSpeed` / `longPressRightSpeed` | 需要按键重复事件，触屏没有这个概念 |
+| `video.decodeThreads` | Media3 没有软解线程数这个设置 |
+| `video.hardwareDecode` | Media3 不能禁用 MediaCodec，没有「只用软解」的入口 |
+| `video.hdrMetadata` | Media3 没有 HDR 元数据接口 |
+| `video.upscaling` | Media3 没有超分接口 |
+| `ui.autoFullScreen` | iOS 的播放界面本来就是全屏且隐藏状态栏，等价于常开 |
+
+这一栏以后不再每轮重新评估。死键 17 条的分类见前几节：字幕样式 9 条（libass 与
+Media3 的 SubtitleView 都从字幕文件取样式，没有「覆盖文件样式」的入口）、
+`audio.globalDelayMs` 与 `video.hdrVivid`（内核没有对应入口）、`play.isoMode`
+（两端都没有 ISO 播放路径）、`library.showMine` 与 `preferredVersion`（结构改动 / 选项集
+不在取证材料里）、`list.showNewTag`（缺判据）、`general.iCloudSync`（需要 entitlement）。
 

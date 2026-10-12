@@ -1,15 +1,19 @@
 package com.senplay.ui
 
 import android.content.ContentUris
+import android.graphics.Bitmap
 import android.provider.MediaStore
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -30,10 +34,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.senplay.core.LibraryStore
 import com.senplay.core.PlayRequest
+import com.senplay.core.Thumbnails
 import com.senplay.core.UrlListItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -46,6 +54,10 @@ fun LibraryScreen(store: LibraryStore, onPlay: (PlayRequest) -> Unit) {
     var localMedia by remember { mutableStateOf<List<LocalMedia>>(emptyList()) }
     var urlList by remember { mutableStateOf(store.urlList()) }
     var showAddDialog by remember { mutableStateOf(false) }
+    /** The three list settings this screen's rows read. */
+    val previewPercent = remember { store.prefInt("list.previewPosition", 10) }
+    val fillThumbnail = remember { store.prefBool("list.fillThumbnail", true) }
+    val listRounded = remember { store.prefBool("list.rounded", true) }
 
     LaunchedEffect(Unit) {
         localMedia = withContext(Dispatchers.IO) { queryLocalMedia(context) }
@@ -116,7 +128,32 @@ fun LibraryScreen(store: LibraryStore, onPlay: (PlayRequest) -> Unit) {
                         val mb = media.sizeBytes / 1024 / 1024
                         Text(seconds.toString() + " 秒 · " + mb.toString() + " MB")
                     },
-                    leadingContent = { Icon(Icons.Filled.Movie, contentDescription = null) },
+                    leadingContent = {
+                        // "视频预览图时间": where in the file the still comes from, and
+                        // "缩略图铺满" for how it fills the frame. Zero means no still
+                        // at all, which is why the icon stays for that case.
+                        val percent = previewPercent
+                        var frame by remember(media.uri, percent) {
+                            mutableStateOf<Bitmap?>(null)
+                        }
+                        LaunchedEffect(media.uri, percent) {
+                            frame = Thumbnails.frame(context, media.uri, percent)
+                        }
+                        val still = frame
+                        if (still != null) {
+                            Image(
+                                bitmap = still.asImageBitmap(),
+                                contentDescription = null,
+                                contentScale = if (fillThumbnail) ContentScale.Crop
+                                else ContentScale.Fit,
+                                modifier = Modifier
+                                    .size(width = 46.dp, height = 66.dp)
+                                    .clip(RoundedCornerShape(if (listRounded) 5.dp else 0.dp))
+                            )
+                        } else {
+                            Icon(Icons.Filled.Movie, contentDescription = null)
+                        }
+                    },
                     modifier = Modifier.clickable {
                         onPlay(
                             PlayRequest(
