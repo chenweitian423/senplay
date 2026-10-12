@@ -48,7 +48,14 @@ fun SenPlayTheme(content: @Composable () -> Unit) {
     val context = LocalContext.current
     val chosen = LibraryStore.get(context).prefString("general.themeColor", "blue")
     val accent = Accents[chosen] ?: Accents.getValue("blue")
-    val dark = isSystemInDarkTheme()
+    // "外观主题": an explicit choice wins; "system" — the default, and what every
+    // install was doing before this setting existed — hands it back to the OS.
+    val appearance = LibraryStore.get(context).prefString("general.appearance", "system")
+    val dark = when (appearance) {
+        "light" -> false
+        "dark" -> true
+        else -> isSystemInDarkTheme()
+    }
 
     val scheme = (if (dark) Dark else Light).copy(
         primary = if (dark) accent else accent.copy(alpha = 1f),

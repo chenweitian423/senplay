@@ -146,7 +146,23 @@ iOS 其余地方用的是语义色（`Color.secondary`、`Color(.secondarySystem
 本来就跟着系统走。
 
 所以两端都不缺「深色模式」。真正缺的是另一件事：**参考的设置里有「外观主题」
-（浅色 / 深色 / 跟随系统）这一项，我们没有** —— 现在是 Android 固定深色、
-iOS 固定跟随系统。那是一个设置项，不是一个主题工程。
+（浅色 / 深色 / 跟随系统）这一项，我们没有** —— 那件事在第十二节做完了。
+
+（这一句原来写的是「Android 固定深色、iOS 固定跟随系统」，前半句是错的。Android 的
+`Theme.kt` 一直在调 `isSystemInDarkTheme()`，两端都跟随系统；`Dark` 配色里的
+`background = 0xFF0E1114` 只是深色方案本身，不是它被钉死的证据。）
 
 这是第五次「先判定该做、查完发现已有」。前四次分别见第十节和第九节。
+
+## 十二、外观主题补上了
+
+第十一节点名的、唯一一件真缺的事，做完了。新键 `pref.general.appearance`，取值
+`system` / `light` / `dark`，默认 `system`。
+
+iOS 把 `preferredColorScheme` 挂在 `HomeView` 上 —— 所有屏幕都在这层下面，全屏播放器
+也不例外，读一次管全部；`nil` 就是「跟随系统」，所以存下来的字符串直接映射过去。
+Android 把 `Theme.kt` 里的 `isSystemInDarkTheme()` 换成三态判断。默认取 `system`，
+是为了这一项加进去之后，不选它就等于没加。
+
+加完按纪律跑两个检查脚本，由此牵出的一件事记在 `PREF-AUDIT.md`：确认这个新键的默认值
+时才发现，`tools/check-defaults.py` 此前只读到半页设置。

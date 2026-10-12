@@ -7,6 +7,9 @@ struct HomeView: View {
     /// The accent the whole app tints with. Read here rather than in each screen
     /// because @AppStorage is per-view and this is the one view they all sit under.
     @AppStorage("pref.general.themeColor") private var themeColor = "blue"
+    /// "外观主题" — light, dark, or the system's own choice. `nil` is how the
+    /// modifier spells "follow the system", so the stored string maps onto it.
+    @AppStorage("pref.general.appearance") private var appearance = "system"
     @AppStorage("pref.general.defaultModule") private var defaultModule = "files"
     /// "显示记录模块" — hides the playback-history tab. The tag is kept at 3 so the
     /// other tabs do not shift under the viewer when it is turned off.
@@ -41,6 +44,16 @@ struct HomeView: View {
         }
     }
 
+    /// Read once here for the same reason the accent is: every screen hangs off
+    /// this view, so the scheme reaches the player's full-screen cover too.
+    private var preferredScheme: ColorScheme? {
+        switch appearance {
+        case "light": return .light
+        case "dark": return .dark
+        default: return nil
+        }
+    }
+
     var body: some View {
         TabView(selection: $selection) {
             HomeTabView(store: store, pending: $pending)
@@ -66,6 +79,7 @@ struct HomeView: View {
                 .tag(4)
         }
         .tint(accent)
+        .preferredColorScheme(preferredScheme)
         .onChange(of: showRecordModule) { shown in
             if !shown, selection == 3 { selection = 0 }
         }

@@ -409,6 +409,11 @@ private fun SettingsDetail(store: LibraryStore, page: String, onBack: () -> Unit
             ),
             "blue"
         )
+        PrefChoice(
+            store, "general.appearance", "外观主题",
+            listOf("system" to "跟随系统", "light" to "浅色", "dark" to "深色"),
+            "system"
+        )
         // ------------------------------------------------------------ 播放与历史
         GroupHeader("播放与历史")
         ListItem(

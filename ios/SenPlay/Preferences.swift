@@ -55,6 +55,7 @@ private struct GeneralPrefs: View {
     @AppStorage("pref.general.defaultModule") private var defaultModule = "files"
     @AppStorage("pref.ui.showRecordModule") private var showRecordModule = true
     @AppStorage("pref.general.themeColor") private var themeColor = "blue"
+    @AppStorage("pref.general.appearance") private var appearance = "system"
 
     private let modules = ["files", "servers", "iptv", "record"]
     private let colors = ["blue", "cyan", "green", "purple", "orange", "red", "indigo"]
@@ -83,6 +84,14 @@ private struct GeneralPrefs: View {
                     }
                     .padding(.vertical, 4)
                 }
+            }
+            Section("外观主题") {
+                Picker("外观主题", selection: $appearance) {
+                    Text("跟随系统").tag("system")
+                    Text("浅色").tag("light")
+                    Text("深色").tag("dark")
+                }
+                .pickerStyle(.menu)
             }
             Section("iCloud同步") {
                 Toggle("iCloud同步", isOn: $iCloudSync)
