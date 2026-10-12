@@ -1071,6 +1071,15 @@ struct PlayerScreen: View {
                         }
                     }
 
+                    // The reference puts cast in the control bar; here it only lived
+                    // in the more panel, one level deeper than it needs to be.
+                    Button {
+                        kernel?.setExternalPlayback(true)
+                        toast = "已开启外部播放，请在控制中心选择设备"
+                        scheduleToastClear()
+                    } label: {
+                        Image(systemName: "airplayvideo")
+                    }
                     Button { locked.toggle() } label: {
                         Image(systemName: locked ? "lock.fill" : "lock.open")
                     }

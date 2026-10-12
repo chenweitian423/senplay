@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Comment
 import androidx.compose.material.icons.outlined.Comment
 import androidx.compose.material.icons.filled.FastForward
@@ -1471,6 +1472,10 @@ fun PlayerScreen(
                                     )
                                 }
                             }
+                        }
+                        // Same reason as iOS: the reference keeps this on the bar.
+                        IconButton(onClick = { castOpen = true }) {
+                            Icon(Icons.Filled.Cast, contentDescription = "投屏", tint = Color.White)
                         }
                         IconButton(onClick = { locked = !locked }) {
                             Icon(
