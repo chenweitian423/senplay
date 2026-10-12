@@ -264,6 +264,56 @@ struct ServersView: View {
 
     private let types = ["webdav", "emby", "jellyfin", "feiniu", "plex", "ftp", "s3"]
 
+    /// One server as a card. The tile is an SF Symbol plus a colour chosen per
+    /// protocol, so the grid reads like the reference's layout without using any
+    /// of its artwork.
+    private func serverCard(_ server: ServerConfig) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: Self.protocolIcon(server.type))
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: 30, height: 30)
+                .background(Self.protocolColor(server.type))
+                .cornerRadius(7)
+            Spacer(minLength: 0)
+            Text(server.name.isEmpty ? server.address : server.name)
+                .font(.subheadline.weight(.medium))
+                .lineLimit(1)
+            Text(server.type.uppercased() + " · " + server.address)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, minHeight: 96, alignment: .leading)
+        .background(Color(.secondarySystemGroupedBackground))
+        .cornerRadius(10)
+    }
+
+    private static func protocolIcon(_ type: String) -> String {
+        switch type {
+        case "emby", "jellyfin", "feiniu": return "play.rectangle.fill"
+        case "plex": return "play.tv.fill"
+        case "ftp", "sftp": return "folder.fill"
+        case "s3": return "cloud.fill"
+        case "smb": return "externaldrive.connected.to.line.below.fill"
+        default: return "externaldrive.fill"
+        }
+    }
+
+    private static func protocolColor(_ type: String) -> Color {
+        switch type {
+        case "emby": return .green
+        case "jellyfin": return .purple
+        case "feiniu": return .teal
+        case "plex": return .orange
+        case "ftp", "sftp": return .yellow
+        case "s3": return .blue
+        case "smb": return .indigo
+        default: return .blue
+        }
+    }
+
     var body: some View {
         NavigationView {
             List {
@@ -273,20 +323,21 @@ struct ServersView: View {
                             .font(.footnote)
                             .foregroundColor(.secondary)
                     }
-                    ForEach(store.servers) { server in
-                        NavigationLink {
-                            ServerBrowserView(server: server, pending: $pending)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(server.name.isEmpty ? server.address : server.name)
-                                Text(server.type.uppercased() + " · " + server.address)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .lineLimit(1)
+                    // Two columns of cards, the way the reference lays out its library.
+                    // The tile is a system symbol plus a colour per protocol — none of
+                    // the reference app's own artwork is involved.
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 12),
+                                        GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                        ForEach(store.servers) { server in
+                            NavigationLink {
+                                ServerBrowserView(server: server, pending: $pending)
+                            } label: {
+                                serverCard(server)
                             }
-                        }
-                        .swipeActions {
-                            Button("删除", role: .destructive) { store.remove(server: server) }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                Button("删除", role: .destructive) { store.remove(server: server) }
+                            }
                         }
                     }
                 }

@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -29,6 +30,8 @@ import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
@@ -38,6 +41,10 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Dns
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -52,7 +59,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
@@ -112,18 +118,23 @@ fun ServersScreen(store: LibraryStore, onPlay: (PlayRequest) -> Unit) {
                 )
             }
 
-            LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                items(servers, key = { it.id }) { server ->
-                    ListItem(
-                        headlineContent = { Text(server.name.ifBlank { server.address }) },
-                        supportingContent = { Text(server.type.uppercase() + " · " + server.address, maxLines = 1) },
-                        trailingContent = {
-                            IconButton(onClick = {
-                                store.removeServer(server.id)
-                                servers = store.servers()
-                            }) { Icon(Icons.Filled.Delete, contentDescription = "删除") }
-                        },
-                        modifier = Modifier.clickable { browsing = server }
+            // Two columns of cards, matching how the reference lays out its library.
+            // The tile is a Material icon plus a colour per protocol — none of the
+            // reference app's own artwork is involved.
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                contentPadding = PaddingValues(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                gridItems(servers, key = { it.id }) { server ->
+                    ServerCard(
+                        server = server,
+                        onOpen = { browsing = server },
+                        onDelete = {
+                            store.removeServer(server.id)
+                            servers = store.servers()
+                        }
                     )
                 }
             }
@@ -1062,4 +1073,84 @@ private fun AddServerDialog(onDismiss: () -> Unit, onSave: (ServerConfig) -> Uni
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
     )
+}
+
+/**
+ * One server as a card: a coloured protocol tile, its name, and where it points.
+ * Colour and icon are chosen per protocol so the grid reads the way the reference
+ * does, without carrying any of its artwork.
+ */
+@Composable
+private fun ServerCard(
+    server: com.senplay.core.ServerConfig,
+    onOpen: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(onClick = onOpen)
+            .padding(12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(30.dp)
+                    .clip(RoundedCornerShape(7.dp))
+                    .background(protocolColor(server.type)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    protocolIcon(server.type),
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(17.dp)
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
+                Icon(
+                    Icons.Filled.Delete,
+                    contentDescription = "删除",
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            server.name.ifBlank { server.address },
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            server.type.uppercase() + " · " + server.address,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+private fun protocolIcon(type: String) = when (type) {
+    "emby", "jellyfin", "feiniu" -> Icons.Filled.PlayCircle
+    "plex" -> Icons.Filled.Tv
+    "ftp", "sftp" -> Icons.Filled.Folder
+    "s3" -> Icons.Filled.Cloud
+    "smb" -> Icons.Filled.Storage
+    else -> Icons.Filled.Dns
+}
+
+private fun protocolColor(type: String) = when (type) {
+    "emby" -> Color(0xFF4CAF50)
+    "jellyfin" -> Color(0xFF9C27B0)
+    "feiniu" -> Color(0xFF009688)
+    "plex" -> Color(0xFFFF9800)
+    "ftp", "sftp" -> Color(0xFFFBC02D)
+    "s3" -> Color(0xFF2196F3)
+    "smb" -> Color(0xFF3F51B5)
+    else -> Color(0xFF2196F3)
 }
