@@ -80,6 +80,13 @@ enum PrefKey {
     static let ignoreAssStyle = "pref.subtitle.ignoreAss"
     static let ignoreSrtStyle = "pref.subtitle.ignoreSrt"
     static let subtitleFont = "pref.subtitle.font"
+    // "字幕样式" — the reference app's kSubtitleTextColor and friends. Values are
+    // "#RRGGBB" or "#AARRGGBB" so the same string means the same colour on both
+    // platforms, which is what lets one settings screen describe both.
+    static let subtitleTextColor = "pref.subtitle.textColor"
+    static let subtitleBgColor = "pref.subtitle.bgColor"
+    static let subtitleOpacity = "pref.subtitle.opacity"
+    static let subtitleVerticalOffset = "pref.subtitle.verticalOffset"
     static let subtitleScale = "pref.subtitle.scale"
     // 弹幕
     static let danmakuEnabled = "pref.danmaku.enabled"
@@ -542,6 +549,10 @@ struct PlayerScreen: View {
     @AppStorage(PrefKey.useAppBrightness) private var useAppBrightness = false
     @AppStorage(PrefKey.subtitleScale) private var subtitleScale = 1.0
     @AppStorage(PrefKey.subtitleMask) private var subtitleMask = false
+    @AppStorage(PrefKey.subtitleTextColor) private var subtitleTextColor = "#FFFFFF"
+    @AppStorage(PrefKey.subtitleBgColor) private var subtitleBgColor = "#8C000000"
+    @AppStorage(PrefKey.subtitleOpacity) private var subtitleOpacity = 1.0
+    @AppStorage(PrefKey.subtitleVerticalOffset) private var subtitleVerticalOffset = 0.0
     @AppStorage(PrefKey.jpegQuality) private var jpegQuality = 0.8
     @AppStorage(PrefKey.preferHardwareDecode) private var preferHardwareDecode = true
     @AppStorage(PrefKey.rememberAudioTrack) private var rememberAudioTrack = true
@@ -698,13 +709,17 @@ struct PlayerScreen: View {
                         Spacer()
                         Text(subtitles.currentText)
                             .font(.system(size: 18 * subtitleScale, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(Color(hexString: subtitleTextColor))
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(Color.black.opacity(0.55))
+                            .background(Color(hexString: subtitleBgColor))
                             .cornerRadius(6)
-                            .padding(.bottom, subtitleMask ? 110 : 78)
+                            .opacity(subtitleOpacity)
+                            // "字幕防遮挡" lifts the line clear of the controls; the
+                            // vertical offset is the viewer's own nudge on top of that.
+                            .padding(.bottom, (subtitleMask ? 110 : 78)
+                                     + CGFloat(subtitleVerticalOffset))
                     }
                     .allowsHitTesting(false)
                 }
@@ -1807,5 +1822,39 @@ private extension Double {
 private extension Int64 {
     var sizeText: String {
         ByteCountFormatter.string(fromByteCount: self, countStyle: .file)
+    }
+}
+
+extension Color {
+    /// The colour a subtitle setting holds: "#RRGGBB" or "#AARRGGBB", the same spelling
+    /// the Android side stores, so one settings screen describes both.
+    ///
+    /// A value that does not parse falls back to white rather than to clear: an
+    /// unreadable subtitle is worse than a wrongly coloured one.
+    init(hexString: String) {
+        let cleaned = hexString.trimmingCharacters(in: .whitespaces)
+            .replacingOccurrences(of: "#", with: "")
+        var raw: UInt64 = 0
+        guard Scanner(string: cleaned).scanHexInt64(&raw) else {
+            self = .white
+            return
+        }
+        let red, green, blue, alpha: Double
+        switch cleaned.count {
+        case 8:
+            red = Double((raw >> 24) & 0xFF) / 255
+            green = Double((raw >> 16) & 0xFF) / 255
+            blue = Double((raw >> 8) & 0xFF) / 255
+            alpha = Double(raw & 0xFF) / 255
+        case 6:
+            red = Double((raw >> 16) & 0xFF) / 255
+            green = Double((raw >> 8) & 0xFF) / 255
+            blue = Double(raw & 0xFF) / 255
+            alpha = 1
+        default:
+            self = .white
+            return
+        }
+        self = Color(.sRGB, red: red, green: green, blue: blue, opacity: alpha)
     }
 }

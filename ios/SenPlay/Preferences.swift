@@ -584,6 +584,18 @@ private struct SubtitlePrefs: View {
     @AppStorage("pref.subtitle.outlineWidth") private var outlineWidth = 1.0
     @AppStorage("pref.subtitle.shadowWidth") private var shadowWidth = 0.0
     @AppStorage(PrefKey.subtitleScale) private var scale = 1.0
+    @AppStorage(PrefKey.subtitleTextColor) private var subtitleTextColor = "#FFFFFF"
+    @AppStorage(PrefKey.subtitleBgColor) private var subtitleBgColor = "#8C000000"
+    @AppStorage(PrefKey.subtitleOpacity) private var subtitleOpacity = 1.0
+    @AppStorage(PrefKey.subtitleVerticalOffset) private var subtitleVerticalOffset = 0.0
+
+    /// Fixed palettes rather than a colour picker: the stored value is a hex string
+    /// the Android side reads, and a free picker would let the two drift into formats
+    /// the other cannot parse.
+    private let subtitleColors = [("#FFFFFF", "白色"), ("#FFFF00", "黄色"), ("#00FFFF", "青色"),
+                                  ("#00FF00", "绿色"), ("#FFA500", "橙色"), ("#FF69B4", "粉色")]
+    private let subtitleBackgrounds = [("#8C000000", "半透明黑"), ("#00000000", "无背景"),
+                                       ("#000000", "纯黑"), ("#FFFFFFFF", "白色")]
 
     private let languages = [("none", "默认"), ("zh-Hans", "简体中文"), ("zh-Hant", "繁体中文"), ("en", "英语"), ("ja", "日语")]
 
@@ -591,6 +603,24 @@ private struct SubtitlePrefs: View {
         List {
             Section {
                 Toggle("记住所选字幕", isOn: $rememberTrack)
+                Picker("字幕文字颜色", selection: $subtitleTextColor) {
+                    ForEach(subtitleColors, id: \.0) { Text($0.1).tag($0.0) }
+                }
+                Picker("字幕背景颜色", selection: $subtitleBgColor) {
+                    ForEach(subtitleBackgrounds, id: \.0) { Text($0.1).tag($0.0) }
+                }
+                HStack {
+                    Text("字幕不透明度")
+                    Slider(value: $subtitleOpacity, in: 0.2...1.0)
+                    Text(String(format: "%.0f%%", subtitleOpacity * 100))
+                        .font(.footnote).foregroundColor(.secondary)
+                }
+                HStack {
+                    Text("字幕垂直偏移")
+                    Slider(value: $subtitleVerticalOffset, in: -60...200, step: 2)
+                    Text("\(Int(subtitleVerticalOffset))")
+                        .font(.footnote).foregroundColor(.secondary)
+                }
                 Picker("字幕首选语言", selection: $firstLanguage) {
                     ForEach(languages, id: \.0) { Text($0.1).tag($0.0) }
                 }

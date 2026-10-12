@@ -260,6 +260,24 @@ fun SettingsScreen(store: LibraryStore) {
         GroupHeader("字幕设置")
         PrefSwitch(store, "subtitle.rememberTrack", "记住所选字幕", null, true)
         PrefChoice(
+            store, "subtitle.textColor", "字幕文字颜色",
+            listOf(
+                "#FFFFFF" to "白色", "#FFFF00" to "黄色", "#00FFFF" to "青色",
+                "#00FF00" to "绿色", "#FFA500" to "橙色", "#FF69B4" to "粉色"
+            ),
+            "#FFFFFF"
+        )
+        PrefChoice(
+            store, "subtitle.bgColor", "字幕背景颜色",
+            listOf(
+                "#8C000000" to "半透明黑", "#00000000" to "无背景",
+                "#000000" to "纯黑", "#FFFFFFFF" to "白色"
+            ),
+            "#8C000000"
+        )
+        PrefSlider(store, "subtitle.opacity", "字幕不透明度", 0.2f, 1f, 0.05f, 1f, "")
+        PrefSlider(store, "subtitle.verticalOffset", "字幕垂直偏移", -60f, 200f, 2f, 0f, " pt")
+        PrefChoice(
             store, "subtitle.firstLanguage", "字幕首选语言",
             listOf(
                 "none" to "默认", "zh-Hans" to "简体中文", "zh-Hant" to "繁体中文",

@@ -297,6 +297,18 @@ private const val P_REMEMBER_SUBTITLE_TRACK = "subtitle.rememberTrack"
 private const val P_SWITCH_MEDIA_BUTTON = "ui.switchMediaButton"
 private const val P_SUBTITLE_SCALE = "subtitle.scale"
 private const val P_SUBTITLE_MASK = "subtitle.mask"
+// "字幕样式" — the reference app's kSubtitleTextColor and friends. Values are
+// "#RRGGBB" or "#AARRGGBB", the same spelling iOS stores, so one settings screen
+// describes both.
+private const val P_SUBTITLE_TEXT_COLOR = "subtitle.textColor"
+private const val P_SUBTITLE_BG_COLOR = "subtitle.bgColor"
+private const val P_SUBTITLE_OPACITY = "subtitle.opacity"
+private const val P_SUBTITLE_VERTICAL_OFFSET = "subtitle.verticalOffset"
+
+/** Parses a "#RRGGBB" / "#AARRGGBB" setting, falling back rather than throwing: an
+ * unreadable subtitle is worse than a wrongly coloured one. */
+private fun subtitleColor(value: String, fallback: Int): Int =
+    runCatching { android.graphics.Color.parseColor(value) }.getOrDefault(fallback)
 
 /**
  * The same three modes the iOS side offers, mapped onto the view's own resize modes
@@ -372,6 +384,10 @@ fun PlayerScreen(
     val switchMediaButton = remember { store.prefBool(P_SWITCH_MEDIA_BUTTON, true) }
     val subtitleScale = remember { store.prefFloat(P_SUBTITLE_SCALE, 1f) }
     val subtitleMask = remember { store.prefBool(P_SUBTITLE_MASK, false) }
+    val subtitleTextColor = remember { store.prefString(P_SUBTITLE_TEXT_COLOR, "#FFFFFF") }
+    val subtitleBgColor = remember { store.prefString(P_SUBTITLE_BG_COLOR, "#8C000000") }
+    val subtitleOpacity = remember { store.prefFloat(P_SUBTITLE_OPACITY, 1f) }
+    val subtitleVerticalOffset = remember { store.prefInt(P_SUBTITLE_VERTICAL_OFFSET, 0) }
     /** "记住缩放大小" — the pinch scale comes back with the next file. */
     var zoom by remember {
         mutableStateOf(if (rememberZoom) store.prefFloat(P_ZOOM, 1f).coerceIn(0.6f, 3f) else 1f)
@@ -1107,6 +1123,24 @@ fun PlayerScreen(
                             if (subtitleMask && floatingControls) 0.20f
                             else SubtitleView.DEFAULT_BOTTOM_PADDING_FRACTION
                         )
+                        // "字幕样式": Media3 draws captions through CaptionStyleCompat,
+                        // which carries the text colour, the background colour and the
+                        // typeface but no outline width — so only the parts it can
+                        // honour are wired here.
+                        captions.setStyle(
+                            androidx.media3.ui.CaptionStyleCompat(
+                                subtitleColor(subtitleTextColor, android.graphics.Color.WHITE),
+                                subtitleColor(subtitleBgColor, 0x8C000000.toInt()),
+                                android.graphics.Color.TRANSPARENT,
+                                androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_NONE,
+                                android.graphics.Color.WHITE,
+                                null
+                            )
+                        )
+                        captions.alpha = subtitleOpacity
+                        // "字幕垂直偏移" — padding shifts the whole caption block, on top
+                        // of whatever the anti-obstruction setting already applied.
+                        captions.setPadding(0, 0, 0, subtitleVerticalOffset)
                     }
                 }
             }
