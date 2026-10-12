@@ -24,7 +24,7 @@ struct HomeView: View {
     /// than a tab that no longer exists.
     private static func tabIndex(_ module: String) -> Int {
         switch module {
-        case "record": return 2
+        case "record": return 3
         default: return 0
         }
     }
@@ -43,27 +43,31 @@ struct HomeView: View {
 
     var body: some View {
         TabView(selection: $selection) {
+            HomeTabView(store: store, pending: $pending)
+                .tabItem { Label("首页", systemImage: "house") }
+                .tag(0)
+
             LibraryView(store: store, pending: $pending)
                 .tabItem { Label("媒体库", systemImage: "film.stack") }
-                .tag(0)
+                .tag(1)
 
             SearchView(store: store, pending: $pending)
                 .tabItem { Label("搜索", systemImage: "magnifyingglass") }
-                .tag(1)
+                .tag(2)
 
             if showRecordModule {
                 HistoryView(store: store, pending: $pending)
                     .tabItem { Label("记录", systemImage: "clock.arrow.circlepath") }
-                    .tag(2)
+                    .tag(3)
             }
 
             PreferencesView()
                 .tabItem { Label("设置", systemImage: "gearshape") }
-                .tag(3)
+                .tag(4)
         }
         .tint(accent)
         .onChange(of: showRecordModule) { shown in
-            if !shown, selection == 2 { selection = 0 }
+            if !shown, selection == 3 { selection = 0 }
         }
     }
 }

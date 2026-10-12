@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -54,8 +55,9 @@ fun HomeScreen(store: LibraryStore) {
     /** "显示记录模块" — the index stays at 3 so the other tabs keep their tags; only
      * the item and, below, its screen are skipped. */
     val showRecordModule = remember { store.prefBool("ui.showRecordModule", true) }
-    val recordTab = 2
+    val recordTab = 3
     val tabs = listOf(
+        Tab("首页", Icons.Filled.Home),
         Tab("媒体库", Icons.Filled.VideoLibrary),
         Tab("搜索", Icons.Filled.Search),
         Tab("记录", Icons.Filled.History),
@@ -110,8 +112,13 @@ fun HomeScreen(store: LibraryStore) {
             when {
                 nested == "servers" -> ServersScreen(store) { PlayerLauncher.start(context, it) }
                 nested == "iptv" -> IPTVScreen(store) { PlayerLauncher.start(context, it) }
-                tab == 0 -> LibraryScreen(store, { PlayerLauncher.start(context, it) }) { nested = it }
-                tab == 1 -> SearchScreen(store) { PlayerLauncher.start(context, it) }
+                tab == 0 -> HomeTabScreen(
+                    store,
+                    onPlay = { PlayerLauncher.start(context, it) },
+                    onOpenServers = { nested = "servers" }
+                )
+                tab == 1 -> LibraryScreen(store, { PlayerLauncher.start(context, it) }) { nested = it }
+                tab == 2 -> SearchScreen(store) { PlayerLauncher.start(context, it) }
                 tab == recordTab -> HistoryScreen(store) { PlayerLauncher.start(context, it) }
                 else -> SettingsScreen(store)
             }
