@@ -41,6 +41,8 @@ enum PrefKey {
     static let leftVerticalAction = "pref.gesture.leftVertical"
     static let rightVerticalAction = "pref.gesture.rightVertical"
     static let longPressSpeed = "pref.gesture.longPressSpeed"
+    /// The last pinch scale, kept so "记住缩放大小" has somewhere to remember it.
+    static let zoom = "pref.gesture.zoom"
     static let rememberZoomSize = "pref.gesture.rememberZoomSize"
     static let useAppBrightness = "pref.gesture.useAppBrightness"
     // 视频
@@ -495,6 +497,7 @@ struct PlayerScreen: View {
     @AppStorage(PrefKey.leftVerticalAction) private var leftVerticalAction = GestureAction.brightness.rawValue
     @AppStorage(PrefKey.rightVerticalAction) private var rightVerticalAction = GestureAction.volume.rawValue
     @AppStorage(PrefKey.rememberZoomSize) private var rememberZoomSize = true
+    @AppStorage(PrefKey.zoom) private var rememberedZoom = 1.0
     @AppStorage(PrefKey.useAppBrightness) private var useAppBrightness = false
     @AppStorage(PrefKey.subtitleScale) private var subtitleScale = 1.0
     @AppStorage(PrefKey.subtitleMask) private var subtitleMask = false
@@ -735,22 +738,31 @@ struct PlayerScreen: View {
                 .onChanged { value in zoom = max(0.6, min(3.0, value)) }
                 .onEnded { value in
                     zoom = max(0.6, min(3.0, value))
+                    // "记住缩放大小": the scale is part of how someone set the picture
+                    // up, so it comes back with the next file unless the switch says
+                    // otherwise.
+                    if rememberZoomSize { rememberedZoom = Double(zoom) }
                     toast = String(format: "缩放 %.2fx", zoom)
                     scheduleToastClear()
                 }
         )
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.5)
-                .onEnded { _ in
-                    guard !longPressSpeedActive else { return }
-                    longPressSpeedActive = true
-                    // The screen has no left or right, so it uses the general hold
-                    // rate. The arrow keys do have sides and use their own.
-                    kernel?.setRate(Float(longPressSpeedRate))
-                    hud = PlayerHUD(symbol: "forward.fill",
-                                    text: String(format: "%.2fx", longPressSpeedRate))
-                }
-        )
+        // Hold to speed up, release to go back. `LongPressGesture` on its own only
+        // reports the moment the hold is recognised — nothing fires when the finger
+        // lifts, so the rate stayed at the hold value until the next drag ended.
+        .onLongPressGesture(minimumDuration: 0.5, maximumDistance: 60) {
+            guard !longPressSpeedActive else { return }
+            longPressSpeedActive = true
+            // The screen has no left or right, so it uses the general hold rate. The
+            // arrow keys do have sides and use their own.
+            kernel?.setRate(Float(longPressSpeedRate))
+            hud = PlayerHUD(symbol: "forward.fill",
+                            text: String(format: "%.2fx", longPressSpeedRate))
+        } onPressingChanged: { pressing in
+            guard !pressing, longPressSpeedActive else { return }
+            longPressSpeedActive = false
+            kernel?.setRate(speed)
+            scheduleHUDClear()
+        }
         // "左键单击" on the desktop is the single tap here; the default is play/pause,
         // which is why the settings row reads that way.
         .onTapGesture { perform(clickAction) }
@@ -1536,6 +1548,9 @@ struct PlayerScreen: View {
         isPlaying = true
         volume = Double(player.layer.player.playbackVolume)
         brightness = UIScreen.main.brightness
+        // "记住缩放大小": the pinch scale from the last session, unless it was
+        // switched off or never set.
+        zoom = rememberZoomSize && rememberedZoom > 0 ? CGFloat(rememberedZoom) : 1
 
         let resume = request.positionMs > 0
             ? request.positionMs

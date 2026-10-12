@@ -37,6 +37,33 @@ ANDROID_DECL = re.compile(r'private const val (P_\w+) = "([^"]+)"')
 # these made the audit report three times that fewer keys were dead than really were.
 ANDROID_INLINE = re.compile(r'(?:set)?[Pp]ref(?:Bool|Int|Float|String)\("([^"]+)"')
 ANDROID_ROW = re.compile(r'Pref(?:Switch|Choice|Slider|Text)\(\s*store,\s*"([^"]+)"')
+# A property wrapper binding, with the variable it declares. Used to tell "reads the
+# value and uses it" apart from "reads the value and never mentions it again".
+IOS_BINDING = re.compile(
+    r'@AppStorage\((?:PrefKey\.(\w+)|"([^"]+)")\)\s*(?:private\s+)?var\s+(\w+)'
+)
+
+
+def bound_but_unused(sources: list[pathlib.Path], name_to_key: dict[str, str]) -> dict[str, str]:
+    """Keys whose binding exists but whose variable is never mentioned again.
+
+    A binding really does read UserDefaults, which is why it counts as a live read —
+    but a value nothing consults is not a feature. This is how `rememberZoomSize`
+    looked wired on iOS while no code in the player ever read the scale it was meant
+    to restore. Only the declaration itself is ignored; `$name` counts as a use.
+    """
+    out: dict[str, str] = {}
+    for path in sources:
+        if path.name in IOS_SETTINGS_UI:
+            continue
+        text = path.read_text(encoding="utf-8")
+        for constant, literal, variable in IOS_BINDING.findall(text):
+            key = literal or name_to_key.get(constant, "")
+            if not key:
+                continue
+            if len(re.findall(r"\b" + re.escape(variable) + r"\b", text)) <= 1:
+                out[key] = path.name
+    return out
 
 
 def scan(sources: list[pathlib.Path], decl_re: re.Pattern, settings_ui: set[str]) -> dict[str, set[str]]:
@@ -168,6 +195,17 @@ def main() -> int:
         reader = "ios" if ios.get(key) else "android"
         silent = "android" if reader == "ios" else "ios"
         print(f"  {key:<46} {reader} reads it, {silent} does not")
+
+    name_to_key: dict[str, str] = {}
+    for path in ios_sources:
+        for name, key in IOS_DECL.findall(path.read_text(encoding="utf-8")):
+            name_to_key.setdefault(name, key)
+    unused = bound_but_unused(ios_sources, name_to_key)
+
+    print()
+    print(f"--- iOS binding exists, the value is never used ({len(unused)}) ---")
+    for key in sorted(unused):
+        print(f"  {key:<46} {unused[key]}")
     return 0
 
 

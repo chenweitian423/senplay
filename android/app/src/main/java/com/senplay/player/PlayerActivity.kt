@@ -14,6 +14,9 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -67,6 +70,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -267,6 +271,9 @@ private const val P_PAUSE_AUTO_LOCK = "play.pauseAutoLock"
 private const val P_SCREENSHOT_FORMAT = "video.screenshotFormat"
 private const val P_JPEG_QUALITY = "video.jpegQuality"
 private const val P_SWITCH_BLACKOUT = "video.switchBlackout"
+private const val P_LONG_PRESS_SPEED = "gesture.longPressSpeed"
+private const val P_REMEMBER_ZOOM = "gesture.rememberZoomSize"
+private const val P_ZOOM = "gesture.zoom"
 
 /**
  * The same three modes the iOS side offers, mapped onto the view's own resize modes
@@ -332,6 +339,15 @@ fun PlayerScreen(
     var castOpen by remember { mutableStateOf(false) }
     var castTarget by remember { mutableStateOf<com.senplay.net.DlnaDevice?>(null) }
     var countdown by remember { mutableStateOf(0) }
+    // Declared here rather than with the other preference reads below: the zoom state
+    // is initialised from it, and a local val has to exist before it is used.
+    val rememberZoom = remember { store.prefBool(P_REMEMBER_ZOOM, true) }
+    /** "记住缩放大小" — the pinch scale comes back with the next file. */
+    var zoom by remember {
+        mutableStateOf(if (rememberZoom) store.prefFloat(P_ZOOM, 1f).coerceIn(0.6f, 3f) else 1f)
+    }
+    var holdSpeedActive by remember { mutableStateOf(false) }
+    var speedBeforeHold by remember { mutableStateOf(1f) }
 
     val autoHideSeconds = remember { store.prefInt(P_HIDE_AFTER, 3) }
     val forwardSeconds = remember { store.prefInt(P_FORWARD, 15) }
@@ -363,6 +379,8 @@ fun PlayerScreen(
     val screenshotFormat = remember { store.prefString(P_SCREENSHOT_FORMAT, "jpg") }
     val jpegQuality = remember { store.prefFloat(P_JPEG_QUALITY, 0.8f) }
     val switchBlackout = remember { store.prefBool(P_SWITCH_BLACKOUT, true) }
+    /** "长按屏幕倍速" — the hold rate, as a number the settings screen stores as text. */
+    val longPressRate = remember { store.prefString(P_LONG_PRESS_SPEED, "2.0").toFloatOrNull() ?: 2f }
     val floatingControls = remember {
         store.prefString("ui.controlBarStyle", "bottom") == "floating"
     }
@@ -759,6 +777,24 @@ fun PlayerScreen(
             .fillMaxSize()
             .background(Color.Black)
             .pointerInput(Unit) {
+                // "双指缩放画面": only two fingers count, so a one-finger drag still
+                // reaches the seek and brightness detector below.
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    do {
+                        val event = awaitPointerEvent()
+                        if (event.changes.size >= 2) {
+                            val change = event.calculateZoom()
+                            if (change != 1f) {
+                                zoom = (zoom * change).coerceIn(0.6f, 3f)
+                                if (rememberZoom) store.setPrefFloat(P_ZOOM, zoom)
+                                event.changes.forEach { it.consume() }
+                            }
+                        }
+                    } while (event.changes.any { it.pressed })
+                }
+            }
+            .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { performGesture(clickAction) },
                     onDoubleTap = { offset: Offset ->
@@ -769,6 +805,23 @@ fun PlayerScreen(
                                 else -> doubleCenter
                             }
                         )
+                    },
+                    // "长按屏幕倍速": hold to speed up, release to go back. The kernel
+                    // rate is set directly rather than through setSpeed, so a hold does
+                    // not overwrite the speed "记住播放倍速" remembers.
+                    onLongPress = {
+                        holdSpeedActive = true
+                        speedBeforeHold = player.playbackParameters.speed
+                        player.setPlaybackSpeed(longPressRate)
+                        hud = "%.2fx".format(longPressRate)
+                    },
+                    onPress = {
+                        tryAwaitRelease()
+                        if (holdSpeedActive) {
+                            holdSpeedActive = false
+                            player.setPlaybackSpeed(speedBeforeHold)
+                            hud = null
+                        }
                     }
                 )
             }
@@ -920,7 +973,11 @@ fun PlayerScreen(
         }
 
         AndroidView(
-            modifier = Modifier.fillMaxSize(),
+            // The pinch scale is applied to the video surface, so the controls and the
+            // gesture layer keep their own coordinates.
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer(scaleX = zoom, scaleY = zoom),
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     playerView = this

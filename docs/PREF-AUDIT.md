@@ -377,3 +377,41 @@ Android 的列表行此前根本不画缩略图，只有文件类型图标。
 - **待查**：`iptv.sources` / `iptv.channels`（Android 有这两个键，iOS 的 IPTV 入口
   是否另有存储，要单独看）。
 
+## 手势在两端对齐，以及一个停不下来的倍速（round 43）
+
+Android 此前既没有长按倍速也没有捏合缩放——设置页那两行在，手势不存在。补齐后单端键
+从 16 降到 14：
+
+| 项 | Android | iOS |
+|---|---|---|
+| 长按屏幕倍速 | `onLongPress` 进入倍速，`onPress` 里的 `tryAwaitRelease()` 抬手恢复 | 同一套语义 |
+| 双指缩放画面 | 新增检测，只认两根手指，单指仍然走拖动 | 原有 `MagnificationGesture` |
+| 记住缩放大小 | 新增 `pref.gesture.zoom` | 同键同默认值 |
+
+**iOS 这边的长按原本停不下来**。`LongPressGesture` 只在长按被识别的那一刻回调，手指
+抬起时没有任何通知，所以倍速会一直挂着，直到下一次拖动结束才被 `handleDragEnd` 复位。
+改用 `onLongPressGesture(minimumDuration:maximumDistance:onPressingChanged:)`，由释放
+分支负责回到原速。这类问题编译器不会说话：手势在，逻辑自洽，只是少了一条结束路径。
+
+长按改的是内核速率，没有走 `setSpeed`：`setSpeed` 会写 `play.lastSpeed`，而
+「记住播放倍速」记的是用户**选择**的倍速，不该被一次长按改写。Android 侧同一处理。
+
+**`pref.gesture.zoom` 是这一轮新加的键**，不出现在任何设置页：它只是
+`rememberZoomSize` 的存放处。参考实现里 `kIsRememberZoomSize` 是个开关，缩放值存哪里
+没有取证，本实现自己定名，两端同名。
+
+## `pref-audit.py` 的第七个盲点（round 43）
+
+`rememberZoomSize` 在 iOS 一直被算作「已接」——因为
+`@AppStorage(PrefKey.rememberZoomSize) private var rememberZoomSize = true` 这一行
+**确实读了 UserDefaults**。问题是这之后整个文件再也没提过这个变量：值读出来了，没人用。
+
+工具现在多输出一段「绑定存在、值从未被使用」，判据是绑定声明的变量名在该文件里除声明
+行外一次都不出现（`$name` 的写法算使用）。写完先拿临时样本验过——一条绑定后从不使用、
+一条绑定并在 `$used` 里出现——确认它抓得到前者、不误报后者。当前仓库这一项是 0，
+因为 `rememberZoomSize` 刚好在这一轮被真的接上了。
+
+**这四次修正（单端、过宽、插值噪声、绑定未用）是同一个形状**：工具的判据总是比现实窄
+一格，而缺口正好落在窄掉的那一格外面。所以每次改完判据都要先喂一个已知的反例，
+再看总数——总数不变不能证明判据有用。
+
