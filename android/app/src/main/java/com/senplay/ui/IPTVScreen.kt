@@ -135,7 +135,7 @@ private fun saveSources(store: LibraryStore, sources: List<Pair<String, String>>
     store.setValue(P_IPTV_SOURCES, array.toString())
 }
 
-private fun loadChannels(store: LibraryStore): List<Channel> = runCatching {
+internal fun loadChannels(store: LibraryStore): List<Channel> = runCatching {
     val raw = store.value(P_IPTV_CHANNELS).orEmpty()
     if (raw.isBlank()) return@runCatching emptyList()
     val array = JSONArray(raw)

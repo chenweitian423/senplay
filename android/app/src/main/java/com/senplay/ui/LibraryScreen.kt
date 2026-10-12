@@ -229,7 +229,7 @@ fun LibraryScreen(
     }
 }
 
-private fun queryLocalMedia(context: android.content.Context): List<LocalMedia> {
+internal fun queryLocalMedia(context: android.content.Context): List<LocalMedia> {
     val result = mutableListOf<LocalMedia>()
     val projection = arrayOf(
         MediaStore.Video.Media._ID,

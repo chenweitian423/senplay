@@ -81,6 +81,11 @@ enum M3UParser {
 // MARK: - Store
 
 final class IPTVStore: ObservableObject {
+    /// The IPTV screen and the search tab read one channel cache. A second instance
+    /// would decode the same bytes at launch and then drift the moment either side
+    /// refreshed a playlist — which is the divergence a shared cache exists to stop.
+    static let shared = IPTVStore()
+
     @Published private(set) var sources: [IPTVSource] = []
     @Published private(set) var channels: [IPTVChannel] = []
     @Published private(set) var lastError: String?
@@ -188,7 +193,7 @@ final class IPTVStore: ObservableObject {
 
 struct IPTVScreen: View {
     @Binding var pending: PlayRequest?
-    @StateObject private var store = IPTVStore()
+    @ObservedObject private var store = IPTVStore.shared
 
     @State private var showingAdd = false
     @State private var newName = ""

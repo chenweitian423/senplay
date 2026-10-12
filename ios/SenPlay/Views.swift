@@ -275,11 +275,18 @@ struct LibraryView: View {
     }
 
     private func refreshLocalFiles() {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let contents = (try? FileManager.default.contentsOfDirectory(at: documents, includingPropertiesForKeys: nil)) ?? []
-        let mediaExtensions: Set<String> = ["mp4", "mkv", "mov", "m4v", "avi", "flv", "ts", "webm", "mp3", "flac", "aac", "wav", "m4a"]
-        localFiles = contents.filter { mediaExtensions.contains($0.pathExtension.lowercased()) }
+        localFiles = localMediaFiles()
     }
+}
+
+/// The media files in the app's Documents directory. The library lists them and the
+/// search tab indexes them, so the directory walk lives here rather than in either
+/// screen — two copies would be two sets of extensions to keep in step.
+func localMediaFiles() -> [URL] {
+    let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    let contents = (try? FileManager.default.contentsOfDirectory(at: documents, includingPropertiesForKeys: nil)) ?? []
+    let mediaExtensions: Set<String> = ["mp4", "mkv", "mov", "m4v", "avi", "flv", "ts", "webm", "mp3", "flac", "aac", "wav", "m4a"]
+    return contents.filter { mediaExtensions.contains($0.pathExtension.lowercased()) }
 }
 
 struct ServersView: View {

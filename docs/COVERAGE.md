@@ -43,7 +43,7 @@
 | 能力 | 状态 | 备注 |
 |---|---|---|
 | 海报墙 | 完成 | 网格 / 列表切换，进度条叠在海报底部 |
-| 搜索 | 完成 | 客户端过滤 + 服务端 `SearchTerm` |
+| 搜索 | 完成 | 全局搜索覆盖 URL 列表、本地媒体、IPTV 频道与服务器；进入服务器后是客户端过滤 + 服务端 `SearchTerm` |
 | 排序 | 完成 | 名称 / 加入时间 / 年份 / 评分 / 时长，升降序 |
 | 继续观看 | 完成 | Emby `/Items/Resume`、Plex `/library/onDeck` |
 | 最近添加 | 完成 | Emby 按 `DateCreated` 倒序、Plex `/library/recentlyAdded` |
