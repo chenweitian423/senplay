@@ -6,15 +6,20 @@ struct PreferencesView: View {
     var body: some View {
         NavigationView {
             List {
-                Section("通用") {
-                    NavigationLink("数据同步") { GeneralPrefs() }
+                Section("数据") {
                     NavigationLink("列表") { ListPrefs() }
                     NavigationLink("媒体库") { LibraryPrefs() }
+                    NavigationLink("数据同步") { GeneralPrefs() }
                 }
-                Section("播放") {
+                // The reference files these under 媒体库配置 rather than under a
+                // generic "play" heading: they describe how the library behaves once
+                // you are already inside it.
+                Section("媒体库配置") {
                     NavigationLink("播放设置") { PlaybackPrefs() }
                     NavigationLink("界面偏好") { InterfacePrefs() }
                     NavigationLink("播放手势") { GesturePrefs() }
+                }
+                Section("媒体") {
                     NavigationLink("视频设置") { VideoPrefs() }
                     NavigationLink("音频设置") { AudioPrefs() }
                     NavigationLink("字幕设置") { SubtitlePrefs() }
@@ -29,7 +34,8 @@ struct PreferencesView: View {
                     HStack {
                         Text("版本")
                         Spacer()
-                        Text("1.0.0").foregroundColor(.secondary)
+                        Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—")
+                            .foregroundColor(.secondary)
                     }
                     Text("按公开行为契约自行实现：URL Scheme、媒体服务器接入方式与交互取自参考应用的可观察行为，不含其任何代码与素材。")
                         .font(.footnote)
