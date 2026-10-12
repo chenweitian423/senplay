@@ -35,6 +35,12 @@ enum PrefKey {
     static let aspectRatioButton = "pref.ui.aspectRatioButton"
     static let pipButton = "pref.ui.pipButton"
     static let speedButton = "pref.ui.speedButton"
+    // "OSD显示…" — the reference app splits the overlay's contents into separate
+    // switches (kShowOSDPlaySpeed, kShowOSDSystemTime, kShowOSDOnlyLandscape) rather
+    // than one "show status information".
+    static let osdPlaySpeed = "pref.ui.osd.playSpeed"
+    static let osdSystemTime = "pref.ui.osd.systemTime"
+    static let osdOnlyLandscape = "pref.ui.osd.onlyLandscape"
     static let showStartTitle = "pref.ui.showStartTitle"
     static let showSkipTip = "pref.ui.showSkipTip"
     static let showCloudThrottleTip = "pref.ui.showCloudThrottleTip"
@@ -551,6 +557,21 @@ struct PlayerScreen: View {
     @AppStorage(PrefKey.danmakuSkipShort) private var danmakuSkipShort = true
     @AppStorage(PrefKey.danmakuFont) private var danmakuFontName = "SF Pro"
     @AppStorage("pref.danmaku.convert") private var danmakuConvert = "none"
+    @AppStorage(PrefKey.osdPlaySpeed) private var osdPlaySpeed = true
+    @AppStorage(PrefKey.osdSystemTime) private var osdSystemTime = true
+    @AppStorage(PrefKey.osdOnlyLandscape) private var osdOnlyLandscape = false
+    /// The clock the overlay prints, refreshed by the same timer that polls statistics.
+    @State private var osdClockText = ""
+    @State private var isLandscape = false
+
+    private static let osdClockFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        // Fixed rather than locale-formatted: the overlay is monospaced and a 12-hour
+        // clock with AM/PM would make it jump width once a second.
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter
+    }()
+
     @AppStorage("pref.ui.showOSD") private var showOSD = false
     // Per-button switches: the reference app has one for each control-bar button
     // rather than a single "show the bar" setting.
@@ -647,7 +668,7 @@ struct PlayerScreen: View {
                         .scaleEffect(zoom)
                 }
 
-                if showOSD, let stats, !stats.isEmpty {
+                if showOSD, let stats, !stats.isEmpty, !osdOnlyLandscape || isLandscape {
                     VStack {
                         osdOverlay(stats)
                         Spacer()
@@ -747,6 +768,10 @@ struct PlayerScreen: View {
         // Polled once a second: the kernel publishes on every frame, and the overlay
         // only needs to stay readable.
         .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
+            // "OSD仅横屏显示" and the clock are refreshed here rather than from an
+            // orientation notification, because this already runs once a second.
+            isLandscape = UIScreen.main.bounds.width > UIScreen.main.bounds.height
+            if osdSystemTime { osdClockText = Self.osdClockFormatter.string(from: Date()) }
             guard showOSD else {
                 if stats != nil { stats = nil }
                 return
@@ -1189,6 +1214,12 @@ struct PlayerScreen: View {
             Text("已读 \(stats.bytesRead.sizeText)")
             if abs(stats.syncDiff) > 0.001 {
                 Text(String(format: "音画差 %.0f ms", stats.syncDiff * 1000))
+            }
+            if osdPlaySpeed, speed != 1 {
+                Text(String(format: "倍速 %.2fx", speed))
+            }
+            if osdSystemTime, !osdClockText.isEmpty {
+                Text(osdClockText)
             }
         }
         .font(.system(size: 11, weight: .medium, design: .monospaced))

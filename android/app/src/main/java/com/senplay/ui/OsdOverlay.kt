@@ -32,6 +32,8 @@ fun OsdOverlay(
     stats: OsdStats,
     positionMs: Long,
     bufferedMs: Long,
+    playSpeed: Float? = null,
+    systemTime: String? = null,
     modifier: Modifier = Modifier
 ) {
     val lines = buildList {
@@ -40,6 +42,11 @@ fun OsdOverlay(
         if (stats.audioBitrate > 0) add("音频 ${bitrate(stats.audioBitrate)}")
         if (stats.dropped > 0) add("丢帧 ${stats.dropped}")
         add("缓冲 ${(bufferedMs - positionMs).coerceAtLeast(0) / 1000}s")
+        // "OSD显示播放速度" and "OSD显示系统时间"
+        if (playSpeed != null && playSpeed != 1f) {
+            add(String.format(java.util.Locale.US, "倍速 %.2fx", playSpeed))
+        }
+        systemTime?.let { add(it) }
     }
 
     Column(

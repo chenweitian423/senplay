@@ -360,6 +360,9 @@ private struct InterfacePrefs: View {
     @AppStorage(PrefKey.showStartTitle) private var showStartTitle = true
     @AppStorage(PrefKey.showSkipTip) private var showSkipTip = true
     @AppStorage("pref.ui.showOSD") private var showOSD = false
+    @AppStorage(PrefKey.osdPlaySpeed) private var osdPlaySpeed = true
+    @AppStorage(PrefKey.osdSystemTime) private var osdSystemTime = true
+    @AppStorage(PrefKey.osdOnlyLandscape) private var osdOnlyLandscape = false
     @AppStorage("pref.play.rememberSpeed") private var rememberSpeed = true
     @AppStorage(PrefKey.showCloudThrottleTip) private var showCloudThrottleTip = true
 
@@ -401,6 +404,9 @@ private struct InterfacePrefs: View {
                 Toggle("开始播放提示标题", isOn: $showStartTitle)
                 Toggle("即将跳过片头/片尾", isOn: $showSkipTip)
                 Toggle("显示状态信息", isOn: $showOSD)
+                Toggle("显示播放速度", isOn: $osdPlaySpeed)
+                Toggle("显示系统时间", isOn: $osdSystemTime)
+                Toggle("仅横屏显示", isOn: $osdOnlyLandscape)
                 Toggle("记住播放倍速", isOn: $rememberSpeed)
                 Toggle("网盘限速提示", isOn: $showCloudThrottleTip)
             }

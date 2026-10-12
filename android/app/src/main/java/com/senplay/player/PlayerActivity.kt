@@ -244,6 +244,16 @@ private const val P_PLAY_BUTTON = "ui.playButton"
 private const val P_ASPECT_RATIO_BUTTON = "ui.aspectRatioButton"
 private const val P_PIP_BUTTON = "ui.pipButton"
 private const val P_SPEED_BUTTON = "ui.speedButton"
+// "OSD显示…" — the reference app splits the overlay's contents into separate switches
+// (kShowOSDPlaySpeed, kShowOSDSystemTime, kShowOSDOnlyLandscape) rather than one
+// "show status information".
+private const val P_OSD_PLAY_SPEED = "ui.osd.playSpeed"
+private const val P_OSD_SYSTEM_TIME = "ui.osd.systemTime"
+private const val P_OSD_ONLY_LANDSCAPE = "ui.osd.onlyLandscape"
+
+/** Fixed rather than locale-formatted: the overlay is monospaced and a 12-hour clock
+ * would make the line change width once a second. */
+private val OSD_CLOCK_FORMAT = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
 private const val P_DOUBLE_LEFT = "gesture.doubleLeft"
 private const val P_DOUBLE_CENTER = "gesture.doubleCenter"
 private const val P_DOUBLE_RIGHT = "gesture.doubleRight"
@@ -349,6 +359,8 @@ fun PlayerScreen(
         )
     }
     var osd by remember { mutableStateOf<OsdStats?>(null) }
+    var osdClock by remember { mutableStateOf("") }
+    var isLandscape by remember { mutableStateOf(false) }
     var castOpen by remember { mutableStateOf(false) }
     var castTarget by remember { mutableStateOf<com.senplay.net.DlnaDevice?>(null) }
     var countdown by remember { mutableStateOf(0) }
@@ -378,6 +390,9 @@ fun PlayerScreen(
     val showAspectRatioButton = remember { store.prefBool(P_ASPECT_RATIO_BUTTON, true) }
     val showPipButton = remember { store.prefBool(P_PIP_BUTTON, true) }
     val showSpeedButton = remember { store.prefBool(P_SPEED_BUTTON, true) }
+    val osdPlaySpeed = remember { store.prefBool(P_OSD_PLAY_SPEED, true) }
+    val osdSystemTime = remember { store.prefBool(P_OSD_SYSTEM_TIME, true) }
+    val osdOnlyLandscape = remember { store.prefBool(P_OSD_ONLY_LANDSCAPE, false) }
     val doubleLeft = remember { store.prefString(P_DOUBLE_LEFT, "backward") }
     val doubleCenter = remember { store.prefString(P_DOUBLE_CENTER, "playPause") }
     val doubleRight = remember { store.prefString(P_DOUBLE_RIGHT, "forward") }
@@ -510,6 +525,12 @@ fun PlayerScreen(
                 width = PlaybackStats.width,
                 height = PlaybackStats.height
             )
+            // "显示系统时间" and "仅横屏显示" are refreshed on the same tick: this
+            // already runs once a second, and a second notification source would only
+            // add a way for the two to disagree.
+            osdClock = if (osdSystemTime) OSD_CLOCK_FORMAT.format(java.util.Date()) else ""
+            isLandscape = context.resources.configuration.orientation ==
+                android.content.res.Configuration.ORIENTATION_LANDSCAPE
             delay(1000)
         }
     }
@@ -1091,12 +1112,14 @@ fun PlayerScreen(
             }
         )
 
-        if (showOSD) {
+        if (showOSD && (!osdOnlyLandscape || isLandscape)) {
             osd?.let { current ->
                 com.senplay.ui.OsdOverlay(
                     stats = current,
                     positionMs = position,
-                    bufferedMs = player.bufferedPosition ?: 0L
+                    bufferedMs = player.bufferedPosition ?: 0L,
+                    playSpeed = if (osdPlaySpeed) player.playbackParameters.speed else null,
+                    systemTime = osdClock.takeIf { osdSystemTime && it.isNotEmpty() }
                 )
             }
         }
