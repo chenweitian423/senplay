@@ -596,3 +596,39 @@ Media3 的 SubtitleView 都从字幕文件取样式，没有「覆盖文件样�
 **一条附带的方法论**：我是从「本地产物 14 MB、CI 产物 23.4 MB」这个差异追进去的。
 第一反应是「本地的可能不完整」，还劝过用 CI 的——**判断正好反了**。
 两个来源的产物大小对不上时，先把它当成线索而不是噪声，别急着认定哪边是对的。
+
+## 另一处盲点：默认值检查只读到了半页设置（1.4.1）
+
+给「外观主题」加键之后按纪律跑 `tools/check-defaults.py`，它报 `mismatches: iOS 0,
+Android 0`。去看它读的是什么，才发现这个全绿来得很便宜：
+
+- **iOS** 只认 `@AppStorage("字面量")`。设置页里有 67 处写成
+  `@AppStorage(PrefKey.x)`，而 `PrefKey` 的枚举值在 `PlayerScreen.swift` 里，脚本没有
+  把两者接起来——那 67 行等于不存在。采到 62 条，实际 124 条。
+- **Android** 用一条正则抓调用参数，碰上跨行写法就停。`PrefChoice` / `PrefSlider` /
+  `PrefText` 全是多行，33 个选择项与 22 个滑杆输入框一个都没进比较。采到 72 条，
+  实际 127 条。
+
+也就是说，「两端的默认值零差异」此前只对两端的单行控件成立。
+
+改成按结构读取之后立刻掉出四处，其中一处是跨端类型冲突：
+
+| 键 | 设置页 | 读点 |
+|---|---|---|
+| `pref.list.previewPosition` | Android 写 `"left"` / `"right"` 字符串 | `LibraryScreen.kt` 用 `prefInt` 读，默认 10 |
+| `pref.library.titleAlignment` | `"left"` | `ServersScreen.kt` 默认 `"leading"` |
+| `pref.audio.firstLanguage` | `"none"` | 两端读点默认 `""` |
+| `pref.subtitle.firstLanguage` | `"none"` | 同上 |
+
+`previewPosition` 是里面唯一会炸的。iOS 这个键存的是预览图时间点百分比（0/5/10/…，
+`Thumbnails.frame` 拿它取帧），Android 的设置页却把它做成了「预览图位置」的左右选择：
+同一个键在两端是两件事，而在 Android 上选完左/右，媒体库一读就是 SharedPreferences
+的类型不符。控件已按 iOS 的口径重做（新增 `PrefIntChoice`，选项 0–50%）。
+
+另外三处只是不一致，行为上没有差别，一并统一到设置页的值，免得下次重新当成发现：
+`titleAlignment` 的读点只与 `"center"` 比较，`"leading"` 和 `"left"` 同效；
+`firstLanguage` 的 `""` 与 `"none"` 都是「不指定」，Media3 收到 `"none"` 只是匹配不到
+语言标签而已。读点现在统一取 `"none"`，并在用之前把它归一化成空。
+
+`check-defaults.py` 现在按结构读：iOS 经 `PrefKey` 枚举解析，Android 用括号配对切参数
+（`PrefSlider` 的默认值在倒数第二位，最后一位是单位）。覆盖 62/72 → 124/127。

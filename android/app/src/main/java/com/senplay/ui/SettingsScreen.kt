@@ -131,9 +131,12 @@ private fun SettingsDetail(store: LibraryStore, page: String, onBack: () -> Unit
         PrefSwitch(store, "list.showResolution", "分辨率", null, true)
         PrefSwitch(store, "list.simplifyResolution", "分辨率简化显示", null, true)
         PrefSwitch(store, "list.fullNameOnMenu", "菜单中显示完整名称", null, false)
-        PrefChoice(
-            store, "list.previewPosition", "预览图位置",
-            listOf("left" to "左边", "right" to "右边"), "right"
+        // "视频预览图时间": where in the file the still comes from, matching the
+        // percentages iOS offers. Zero means the row keeps its icon instead.
+        PrefIntChoice(
+            store, "list.previewPosition", "视频预览图时间",
+            listOf(0 to "0%", 5 to "5%", 10 to "10%", 20 to "20%", 30 to "30%", 50 to "50%"),
+            10
         )
 
         // "文件类型" — the reference app's kFileTypeShowVideo and friends. Folders are
@@ -553,6 +556,40 @@ private fun PrefChoice(
                             onClick = {
                                 value = optionKey
                                 store.setPrefString(key, optionKey)
+                                open = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    )
+}
+
+@Composable
+private fun PrefIntChoice(
+    store: LibraryStore,
+    key: String,
+    title: String,
+    options: List<Pair<Int, String>>,
+    default: Int
+) {
+    var value by remember { mutableStateOf(store.prefInt(key, default)) }
+    var open by remember { mutableStateOf(false) }
+    ListItem(
+        headlineContent = { Text(title) },
+        trailingContent = {
+            Box {
+                TextButton(onClick = { open = true }) {
+                    Text(options.firstOrNull { it.first == value }?.second ?: default.toString())
+                }
+                DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                    options.forEach { (optionKey, label) ->
+                        DropdownMenuItem(
+                            text = { Text(label) },
+                            onClick = {
+                                value = optionKey
+                                store.setPrefInt(key, optionKey)
                                 open = false
                             }
                         )

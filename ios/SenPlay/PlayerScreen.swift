@@ -344,6 +344,12 @@ final class KernelPlayer: NSObject, ObservableObject {
     /// a person would apply reading the track list.
     ///
     /// Called once the player is ready, because tracks do not exist before that.
+    /// The settings screen stores "默认" as the literal "none"; the bridge below
+    /// treats an empty string as "no preference", so the two spellings meet here.
+    static func languagePreference(_ stored: String) -> String {
+        stored == "none" ? "" : stored
+    }
+
     func applyPreferredLanguages(audio: String, subtitle: String) {
         if !audio.isEmpty, let track = match(audio, in: audioTracks()) {
             select(track)
@@ -403,8 +409,8 @@ extension KernelPlayer: KSPlayerLayerDelegate {
             // default for a file nobody has touched, the memory is what was chosen the
             // last time this file was open.
             let remembered = applyRememberedTracks()
-            applyPreferredLanguages(audio: remembered.contains("audio") ? "" : preferredAudioLanguage,
-                                    subtitle: remembered.contains("subtitle") ? "" : preferredSubtitleLanguage)
+            applyPreferredLanguages(audio: remembered.contains("audio") ? "" : Self.languagePreference(preferredAudioLanguage),
+                                    subtitle: remembered.contains("subtitle") ? "" : Self.languagePreference(preferredSubtitleLanguage))
         }
         if state == .bufferFinished || state == .buffering {
             mediaTitle = layer.player.dynamicInfo?.metadata["title"]
@@ -640,8 +646,8 @@ struct PlayerScreen: View {
     @State private var longPressSpeedActive = false
     @AppStorage(PrefKey.longPressSpeed) private var longPressSpeedRate = 2.0
     @AppStorage(PrefKey.controlBarStyle) private var controlBarStyle = "bottom"
-    @AppStorage("pref.audio.firstLanguage") private var preferredAudioLanguage = ""
-    @AppStorage("pref.subtitle.firstLanguage") private var preferredSubtitleLanguage = ""
+    @AppStorage("pref.audio.firstLanguage") private var preferredAudioLanguage = "none"
+    @AppStorage("pref.subtitle.firstLanguage") private var preferredSubtitleLanguage = "none"
     @AppStorage("pref.danmaku.keywords") private var danmakuKeywordText = ""
     @AppStorage("pref.audio.backgroundAudio") private var backgroundAudio = false
     @AppStorage("pref.danmaku.bottomToFloat") private var bottomToFloat = false
@@ -1785,8 +1791,8 @@ struct PlayerScreen: View {
         options.isSeekedAutoPlay = true
 
         let player = KernelPlayer(url: url, options: options)
-        player.preferredAudioLanguage = preferredAudioLanguage
-        player.preferredSubtitleLanguage = preferredSubtitleLanguage
+        player.preferredAudioLanguage = KernelPlayer.languagePreference(preferredAudioLanguage)
+        player.preferredSubtitleLanguage = KernelPlayer.languagePreference(preferredSubtitleLanguage)
         loadRememberedTracks(into: player)
         player.setExternalPlayback(true)
         player.onTime = { [self] current, total in

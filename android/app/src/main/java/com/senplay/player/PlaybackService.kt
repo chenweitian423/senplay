@@ -80,15 +80,18 @@ class PlaybackService : MediaSessionService() {
         // Preferred languages. Media3 matches these against the track metadata the
         // container carries, the same way the iOS side matches on languageCode — the
         // preference is a hint, and a file without a matching track simply keeps
-        // whatever it would have chosen anyway.
-        val audioLanguage = store.prefString("audio.firstLanguage", "")
-        val textLanguage = store.prefString("subtitle.firstLanguage", "")
-        if (audioLanguage.isNotBlank() || textLanguage.isNotBlank()) {
+        // whatever it would have chosen anyway. The settings screen spells "默认" as
+        // the literal "none", which means the same as leaving the field alone.
+        val audioLanguage = store.prefString("audio.firstLanguage", "none")
+        val textLanguage = store.prefString("subtitle.firstLanguage", "none")
+        val wantedAudio = audioLanguage.takeIf { it.isNotBlank() && it != "none" }
+        val wantedText = textLanguage.takeIf { it.isNotBlank() && it != "none" }
+        if (wantedAudio != null || wantedText != null) {
             player.trackSelectionParameters = player.trackSelectionParameters
                 .buildUpon()
                 .apply {
-                    if (audioLanguage.isNotBlank()) setPreferredAudioLanguage(audioLanguage)
-                    if (textLanguage.isNotBlank()) setPreferredTextLanguage(textLanguage)
+                    wantedAudio?.let { setPreferredAudioLanguage(it) }
+                    wantedText?.let { setPreferredTextLanguage(it) }
                 }
                 .build()
         }

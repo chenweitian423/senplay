@@ -774,7 +774,7 @@ private class ListDisplay(store: LibraryStore) {
     val showRating = store.prefBool("library.showRating", true)
     val showRemaining = store.prefBool("library.showRemaining", true)
     val showMediaInfo = store.prefBool("library.showMediaInfo", true)
-    val titleCentered = store.prefString("library.titleAlignment", "leading") == "center"
+    val titleCentered = store.prefString("library.titleAlignment", "left") == "center"
     val showCollection = store.prefBool("library.showCollection", false)
     /** "最新中隐藏已播放" filters inside the strip rather than hiding it. */
     val hidePlayedInLatest = store.prefBool("library.hidePlayedInLatest", false)
