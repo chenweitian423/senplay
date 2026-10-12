@@ -128,3 +128,8 @@ entitlement，得向 Apple 申请。局域网发现因此改用不依赖该授�
   面向键鼠场景，SenPlay 的 iOS 端未绑定；Android 由遥控器事件处理。
 - 参考实现的 AI 超分与 HDR Vivid 依赖其内核私有实现，SenPlay 用 FFmpeg 的
   `scale` 与 `destinationDynamicRange` 近似，效果不等价。
+- Android 的播放队列仍由 `PlayerActivity` 持有（随启动 Intent 传入）。队列面板的跳转
+  已经接上，但**后台播放时的自动连播不工作**：切集逻辑在 activity 里，它不在前台就
+  不会被调用，而队列也只存在于它那块内存中。要修得把队列做成 `PlaybackService` 里
+  那个 player 的 playlist（`setMediaItems`），让 Media3 自己管上一集/下一集与通知栏
+  按钮。通知栏此刻究竟显示哪些按钮没有实测过，这一条是按代码推的。
