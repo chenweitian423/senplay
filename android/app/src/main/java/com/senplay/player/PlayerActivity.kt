@@ -33,6 +33,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Comment
 import androidx.compose.material.icons.outlined.Comment
 import androidx.compose.material.icons.filled.FastForward
@@ -480,6 +482,9 @@ fun PlayerScreen(
     val skipOutroSeconds = remember { store.prefInt(P_SKIP_OUTRO, 0) }
     val nextCountdown = remember { store.prefInt(P_NEXT_COUNTDOWN, 5) }
     var danmakuEnabled by remember { mutableStateOf(store.prefBool(P_DANMAKU_ENABLED, true)) }
+    // "锁定": the gesture layer stops taking input; the controls stay reachable
+    // so there is a way back out.
+    var locked by remember { mutableStateOf(false) }
     val danmakuSize = remember { store.prefFloat(P_DANMAKU_SIZE, 25f).toDouble() }
     val danmakuSpeed = remember { store.prefFloat(P_DANMAKU_SPEED, 0.5f).toDouble() }
     val danmakuArea = remember { store.prefFloat(P_DANMAKU_AREA, 0.15f).toDouble() }
@@ -935,7 +940,8 @@ fun PlayerScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .pointerInput(Unit) {
+            .pointerInput(locked) {
+                if (locked) return@pointerInput
                 // "双指缩放画面": only two fingers count, so a one-finger drag still
                 // reaches the seek and brightness detector below.
                 awaitEachGesture {
@@ -953,7 +959,8 @@ fun PlayerScreen(
                     } while (event.changes.any { it.pressed })
                 }
             }
-            .pointerInput(Unit) {
+            .pointerInput(locked) {
+                if (locked) return@pointerInput
                 detectTapGestures(
                     onTap = { performGesture(clickAction) },
                     onDoubleTap = { offset: Offset ->
@@ -984,7 +991,8 @@ fun PlayerScreen(
                     }
                 )
             }
-            .pointerInput(Unit) {
+            .pointerInput(locked) {
+                if (locked) return@pointerInput
                 var kind = DragKind.NONE
                 var startPosition = 0L
                 var startBrightness = 0f
@@ -1434,6 +1442,13 @@ fun PlayerScreen(
                                     )
                                 }
                             }
+                        }
+                        IconButton(onClick = { locked = !locked }) {
+                            Icon(
+                                if (locked) Icons.Filled.Lock else Icons.Filled.LockOpen,
+                                contentDescription = "锁定",
+                                tint = Color.White
+                            )
                         }
                         IconButton(onClick = { trackPanel = TrackPanel.SUBTITLE }) {
                             Icon(Icons.Filled.Subtitles, contentDescription = "字幕", tint = Color.White)

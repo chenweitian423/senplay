@@ -666,6 +666,11 @@ struct PlayerScreen: View {
     @State private var didSkipIntro = false
     @State private var didSkipOutro = false
     @State private var upNext: QueueItem?
+    /// "锁定" stops the gesture layer taking input while the picture keeps
+    /// playing. The controls stay reachable so there is a way back out — the
+    /// reference hides them and leaves only the lock, which needs its own overlay
+    /// and is a separate piece of work.
+    @State private var locked = false
     @State private var danmakuItems: [DanmakuItem] = []
     @State private var keyRouter = KeyCommandRouter()
     @State private var stats: OSDStats?
@@ -754,6 +759,7 @@ struct PlayerScreen: View {
                 }
 
                 gestureLayer(size: geo.size)
+                    .allowsHitTesting(!locked)
 
                 if let hud { hudView(hud) }
 
@@ -1064,6 +1070,9 @@ struct PlayerScreen: View {
                         }
                     }
 
+                    Button { locked.toggle() } label: {
+                        Image(systemName: locked ? "lock.fill" : "lock.open")
+                    }
                     Button { activePanel = .subtitle } label: { Image(systemName: "captions.bubble") }
                     // The reference keeps a danmaku toggle in the control bar. With only
                     // the setting, turning it off mid-playback meant leaving the player.
