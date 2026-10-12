@@ -242,6 +242,12 @@ final class KernelPlayer: NSObject, ObservableObject {
     var preferredSubtitleLanguage = ""
     /// Length the server reported, used until the kernel reports one of its own.
     var seededDuration: TimeInterval = 0
+    #if DEBUG
+    /// Set SENPLAY_PROBE=1 in the environment to have the kernel and its reported
+    /// total logged every few seconds. Debug builds only.
+    private static let probeEnabled = ProcessInfo.processInfo.environment["SENPLAY_PROBE"] != nil
+    private var lastProbe: TimeInterval = -10
+    #endif
     /// "记住所选字幕/音轨": the track names this file was left on, filled in by the
     /// screen before playback starts.
     var rememberedAudioTrack: String?
@@ -432,6 +438,14 @@ extension KernelPlayer: KSPlayerLayerDelegate {
         // 00:00 while playback runs perfectly well.
         let known = totalTime > 0 ? totalTime : seededDuration
         if known > 0, known != self.totalTime { self.totalTime = known }
+        #if DEBUG
+        if Self.probeEnabled, currentTime - lastProbe >= 4 {
+            lastProbe = currentTime
+            let name = String(describing: type(of: layer.player))
+            NSLog("[SenPlay-probe] kernel=%@ at=%.1f kernelTotal=%.1f seeded=%.1f state=%@",
+                  name, currentTime, totalTime, seededDuration, String(describing: state))
+        }
+        #endif
         onTime?(currentTime, known)
     }
 
