@@ -26,3 +26,5 @@ local.properties
 
 # Device (unsigned IPA) build products, separate from the simulator build.
 ios/build-device/
+# Release simulator build (for reproducing Release-only behaviour).
+ios/build-rel/

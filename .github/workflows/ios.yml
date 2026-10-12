@@ -85,7 +85,7 @@ jobs:
           xcodebuild -project SenPlay.xcodeproj -scheme SenPlay \
             -configuration Debug -sdk iphonesimulator \
             -destination "platform=iOS Simulator,name=$DEVICE" \
-            -derivedDataPath build CODE_SIGNING_ALLOWED=NO \
+            -derivedDataPath build-tests CODE_SIGNING_ALLOWED=NO \
             test > tests.log 2>&1
           status=$?
           grep -E "Executed [0-9]+ tests|error:" tests.log | head -n 12 || true
@@ -100,14 +100,33 @@ jobs:
         working-directory: ios
         run: |
           set -euo pipefail
-          APP=$(find build/Build/Products -maxdepth 2 -name 'SenPlay.app' -type d | head -n1)
-          [ -n "$APP" ] || { echo "::error::未找到 .app"; exit 1; }
+          APP="build/Build/Products/Release-iphoneos/SenPlay.app"
+          [ -d "$APP" ] || { echo "::error::未找到 Release-iphoneos 的 SenPlay.app"; exit 1; }
+          # Release-iphoneos is named rather than found: the same Products directory
+          # also holds whatever else has been built, and `find` promises no order.
+          SIZE=$(du -sm "$APP" | cut -f1)
+          if [ "$SIZE" -lt 20 ]; then
+            echo "::error::app 只有 ${SIZE}MB，这是测试宿主而不是真机包"
+            exit 1
+          fi
+          if [ -e "$APP/Frameworks/XCTest.framework" ]; then
+            echo "::error::真机包里混进了 XCTest 框架"
+            exit 1
+          fi
           V=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Info.plist")
           BID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist")
           [ "$BID" = "com.senplay.player" ] || { echo "::error::Bundle ID 异常: $BID"; exit 1; }
           mkdir -p Payload artifacts
           cp -R "$APP" Payload/SenPlay.app
           rm -rf Payload/SenPlay.app/_CodeSignature
+          # A test host is 39 KB; the real binary is tens of megabytes. Checking the
+          # packaged copy is what would have caught the broken 1.4.0 release before a
+          # person installed it.
+          BINARY=$(stat -f%z Payload/SenPlay.app/SenPlay)
+          if [ "$BINARY" -lt 10000000 ]; then
+            echo "::error::包里的主二进制只有 ${BINARY} 字节"
+            exit 1
+          fi
           zip -qry "artifacts/SenPlay-$V-unsigned.ipa" Payload
           ls -la artifacts
 
