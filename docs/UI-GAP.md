@@ -105,3 +105,22 @@
 
 连同第七节的三条，这八条有一个共同点：**在既有取证材料里找不到就直接判定它不存在**,
 而实机截图和录屏一直都是拿得到的。判断一个功能该不该有，依据必须是那个 app 本身。
+
+## 十、详情页本来就没有缺项（第四次同款误判）
+
+第七节列的「详情页补齐（媒体信息表 / 演员 / 类似作品）」不成立 —— 两端都不成立。
+
+iOS 的 `DetailScreen.swift` 早就具备：海报（`AsyncImage` 拉 `imageURL`，是真图不是占位）、
+评分（★ 8.5，受 `showRating` 控制）、facts 一行（年份 · 时长 · HDR · 分辨率）、
+播放按钮（按 `positionMs` 决定写「播放」还是「继续播放」）、简介（`overview`）、
+演职人员（`cast`）、类似作品（`similarSection`）。
+
+Android 的 `DetailScreen.kt` 同样：`AsyncImage` 海报、`overview`（125 行）、
+`cast`（134 行）、`similar`（137–155 行，走 `client.similar()`）。
+
+数据来源也早就在 `Servers.swift` 里：请求的 `Fields` 已经带
+`Overview,People,Genres,Studios,Tags`，346 行解析 People、395 行解析 Overview，
+272 行还有 Emby 自己的相似度接口。
+
+这是第四次「先判定该做、查完发现已有」。连同第九节那五条，共同点始终是同一个：
+**从参照实现的截图倒推我们缺什么，而不是先读自己的代码。**
