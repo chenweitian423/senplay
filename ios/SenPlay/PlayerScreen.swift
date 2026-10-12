@@ -318,6 +318,13 @@ final class KernelPlayer: NSObject, ObservableObject {
         )
     }
 
+    /// What the video track says about itself. Lives here because the track list
+    /// belongs to the player, which only this class holds.
+    func mediaFacts() -> [String] {
+        let track = layer.player.tracks(mediaType: .video).first { $0.isEnabled }
+        return MediaFacts(track: track, stats: statistics()).parts
+    }
+
     /// Chapter markers reported by the demuxer, used for the jump list.
     func chapters() -> [Chapter] {
         layer.player.chapters
@@ -1006,6 +1013,8 @@ struct PlayerScreen: View {
             Spacer()
 
             VStack(spacing: 8) {
+                mediaInfoLine
+
                 HStack(spacing: 14) {
                     Text(timecode(scrubbing ? scrubTarget : currentTime))
                         .font(.system(.footnote, design: .monospaced))
@@ -1072,6 +1081,26 @@ struct PlayerScreen: View {
                 LinearGradient(colors: [Color.black.opacity(0.0), Color.black.opacity(0.65)],
                                startPoint: .top, endPoint: .bottom)
             )
+        }
+    }
+
+    /// What the file actually is, on the line above the scrubber — the shape the
+    /// reference uses. "HW" is deliberately absent: KSPlayer exposes the track but
+    /// not whether the decoder it picked runs in hardware (its decoder map is
+    /// fileprivate and only a log line records a fallback to software). A reading
+    /// that is always true would be worse than no reading.
+    @ViewBuilder
+    private var mediaInfoLine: some View {
+        let parts = kernel?.mediaFacts() ?? []
+        if !parts.isEmpty {
+            HStack(spacing: 10) {
+                ForEach(parts, id: \.self) { part in
+                    Text(part)
+                }
+                Spacer(minLength: 0)
+            }
+            .font(.system(size: 11, weight: .medium))
+            .foregroundColor(.white.opacity(0.85))
         }
     }
 
@@ -1910,5 +1939,53 @@ private extension Double {
     /// Bytes per second, for the overlay's network rate.
     var sizeRateText: String {
         ByteCountFormatter.string(fromByteCount: Int64(self), countStyle: .file) + "/s"
+    }
+}
+
+/// Everything the video track can say about itself. All of it comes from the track's
+/// format description or the kernel's live counters — nothing here is inferred.
+private struct MediaFacts {
+    let parts: [String]
+
+    init(track: (any MediaPlayerTrack)?, stats: OSDStats?) {
+        var parts: [String] = []
+        if let codec = Self.codec(track) { parts.append(codec) }
+        if Self.isHDR(track) { parts.append("HDR") }
+        if let size = Self.resolution(track) { parts.append(size) }
+        if let fps = stats?.fps, fps > 0 { parts.append(String(format: "%.0fFPS", fps)) }
+        if let bitrate = stats?.videoBitrate, bitrate > 0 {
+            parts.append(String(format: "%.1fmbps", Double(bitrate) / 1_000_000))
+        }
+        self.parts = parts
+    }
+
+    private static func codec(_ track: (any MediaPlayerTrack)?) -> String? {
+        guard let description = track?.formatDescription else { return nil }
+        switch CMFormatDescriptionGetMediaSubType(description) {
+        case kCMVideoCodecType_HEVC, kCMVideoCodecType_HEVCWithAlpha: return "HEVC"
+        case kCMVideoCodecType_H264: return "H.264"
+        case kCMVideoCodecType_AV1: return "AV1"
+        case kCMVideoCodecType_VP9: return "VP9"
+        case kCMVideoCodecType_DolbyVisionHEVC: return "Dolby Vision"
+        default: return nil
+        }
+    }
+
+    private static func isHDR(_ track: (any MediaPlayerTrack)?) -> Bool {
+        guard let description = track?.formatDescription,
+              let extensions = CMFormatDescriptionGetExtensions(description) as? [String: Any],
+              let transfer = extensions[kCMFormatDescriptionExtension_TransferFunction as String] as? String
+        else { return false }
+        // The SDK's symbol names for PQ and HLG are not exposed as constants, and
+        // encoders spell the value differently ("SMPTE ST 2084", "ITU-R BT.2100-2
+        // HLG", ...), so match what it says rather than an exact spelling.
+        return transfer.contains("2084") || transfer.contains("HLG")
+    }
+
+    private static func resolution(_ track: (any MediaPlayerTrack)?) -> String? {
+        guard let description = track?.formatDescription else { return nil }
+        let size = CMVideoFormatDescriptionGetDimensions(description)
+        guard size.height > 0 else { return nil }
+        return "\(size.height)p"
     }
 }

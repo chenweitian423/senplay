@@ -256,6 +256,32 @@ private const val P_OSD_NETWORK_SPEED = "ui.osd.networkSpeed"
 
 /** Fixed rather than locale-formatted: the overlay is monospaced and a 12-hour clock
  * would make the line change width once a second. */
+/** The codec line under the controls. Null-ish parts are simply left out. */
+private fun mediaFacts(): List<String> {
+    val parts = mutableListOf<String>()
+    if (PlaybackStats.hardwareDecoded) parts.add("HW")
+    when (PlaybackStats.sampleMimeType) {
+        "video/hevc" -> parts.add("HEVC")
+        "video/avc" -> parts.add("H.264")
+        "video/av01" -> parts.add("AV1")
+        "video/x-vnd.on2.vp9" -> parts.add("VP9")
+        "video/dolby-vision" -> parts.add("Dolby Vision")
+    }
+    if (PlaybackStats.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_ST2084 ||
+        PlaybackStats.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_HLG
+    ) {
+        parts.add("HDR")
+    }
+    if (PlaybackStats.height > 0) parts.add("${PlaybackStats.height}p")
+    if (PlaybackStats.frameRate > 0f) {
+        parts.add(String.format(java.util.Locale.US, "%.0fFPS", PlaybackStats.frameRate))
+    }
+    if (PlaybackStats.videoBitrate > 0) {
+        parts.add(String.format(java.util.Locale.US, "%.1fmbps", PlaybackStats.videoBitrate / 1_000_000.0))
+    }
+    return parts
+}
+
 private val OSD_CLOCK_FORMAT = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
 private const val P_DOUBLE_LEFT = "gesture.doubleLeft"
 private const val P_DOUBLE_CENTER = "gesture.doubleCenter"
@@ -1286,6 +1312,18 @@ fun PlayerScreen(
                         .background(Color.Black.copy(alpha = 0.42f))
                         .padding(horizontal = 12.dp, vertical = 10.dp)
                 ) {
+                    // What the file actually is, above the scrubber — the shape the
+                    // reference uses. "HW" appears here and not on iOS because only
+                    // this platform names the decoder it picked.
+                    val facts = mediaFacts()
+                    if (facts.isNotEmpty()) {
+                        Text(
+                            facts.joinToString("  "),
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
+                        )
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically

@@ -21,6 +21,16 @@ object PlaybackStats {
     @Volatile var frameRate: Float = 0f
     /** Bits a second as the loader estimates them — the overlay's network rate. */
     @Volatile var bandwidth: Long = 0
+    /** The encoder's mime type, e.g. "video/hevc". */
+    @Volatile var sampleMimeType: String = ""
+    /** C.COLOR_TRANSFER_* of the video track; PQ and HLG mean HDR. */
+    @Volatile var colorTransfer: Int = 0
+    /**
+     * Whether the decoder Media3 picked runs in hardware. Android names it, and
+     * the platform's software decoders all carry one of two prefixes — so this
+     * reading exists only on this side: KSPlayer keeps its decoder map private.
+     */
+    @Volatile var hardwareDecoded: Boolean = false
 
     fun reset() {
         videoBitrate = 0
@@ -30,6 +40,9 @@ object PlaybackStats {
         height = 0
         frameRate = 0f
         bandwidth = 0
+        sampleMimeType = ""
+        colorTransfer = 0
+        hardwareDecoded = false
     }
 }
 
@@ -42,6 +55,18 @@ fun analyticsListener(): AnalyticsListener = object : AnalyticsListener {
     ) {
         PlaybackStats.videoBitrate = format.bitrate
         PlaybackStats.frameRate = format.frameRate ?: 0f
+        PlaybackStats.sampleMimeType = format.sampleMimeType ?: ""
+        PlaybackStats.colorTransfer = format.colorInfo?.colorTransfer ?: 0
+    }
+
+    override fun onVideoDecoderInitialized(
+        eventTime: AnalyticsListener.EventTime,
+        decoderName: String,
+        initializedTimestampMs: Long,
+        initializationDurationMs: Long
+    ) {
+        PlaybackStats.hardwareDecoded = !decoderName.startsWith("c2.android.") &&
+            !decoderName.startsWith("OMX.google.")
     }
 
     override fun onBandwidthEstimate(
