@@ -410,6 +410,7 @@ struct LocalThumbnail: View {
     let percent: Int
 
     @AppStorage("pref.list.fillThumbnail") private var fillThumbnail = true
+    @AppStorage("pref.list.rounded") private var listRounded = true
     @State private var image: UIImage?
 
     var body: some View {
@@ -424,6 +425,9 @@ struct LocalThumbnail: View {
             }
         }
         .frame(width: 46, height: 66)
+        // Without this the .fill still draws outside the frame and covers the file
+        // name — `frame` constrains layout, not painting.
+        .clipShape(RoundedRectangle(cornerRadius: listRounded ? 5 : 0))
         .task(id: file) {
             image = await LocalThumbnailStore.shared.frame(for: file, percent: percent)
         }
