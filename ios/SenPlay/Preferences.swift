@@ -594,7 +594,7 @@ private struct SubtitlePrefs: View {
     @AppStorage("pref.subtitle.shadowWidth") private var shadowWidth = 0.0
     @AppStorage(PrefKey.subtitleScale) private var scale = 1.0
     @AppStorage(PrefKey.subtitleTextColor) private var subtitleTextColor = "#FFFFFF"
-    @AppStorage(PrefKey.subtitleBgColor) private var subtitleBgColor = "#8C000000"
+    @AppStorage(PrefKey.subtitleBgColor) private var subtitleBgColor = "#00000000"
     @AppStorage(PrefKey.subtitleOpacity) private var subtitleOpacity = 1.0
     @AppStorage(PrefKey.subtitleVerticalOffset) private var subtitleVerticalOffset = 0.0
 
@@ -603,7 +603,7 @@ private struct SubtitlePrefs: View {
     /// the other cannot parse.
     private let subtitleColors = [("#FFFFFF", "白色"), ("#FFFF00", "黄色"), ("#00FFFF", "青色"),
                                   ("#00FF00", "绿色"), ("#FFA500", "橙色"), ("#FF69B4", "粉色")]
-    private let subtitleBackgrounds = [("#8C000000", "半透明黑"), ("#00000000", "无背景"),
+    private let subtitleBackgrounds = [("#00000000", "无背景"), ("#8C000000", "半透明黑"),
                                        ("#000000", "纯黑"), ("#FFFFFFFF", "白色")]
 
     private let languages = [("none", "默认"), ("zh-Hans", "简体中文"), ("zh-Hant", "繁体中文"), ("en", "英语"), ("ja", "日语")]

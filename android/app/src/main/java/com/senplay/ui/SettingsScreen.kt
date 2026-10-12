@@ -272,10 +272,10 @@ fun SettingsScreen(store: LibraryStore) {
         PrefChoice(
             store, "subtitle.bgColor", "字幕背景颜色",
             listOf(
-                "#8C000000" to "半透明黑", "#00000000" to "无背景",
+                "#00000000" to "无背景", "#8C000000" to "半透明黑",
                 "#000000" to "纯黑", "#FFFFFFFF" to "白色"
             ),
-            "#8C000000"
+            "#00000000"
         )
         PrefSlider(store, "subtitle.opacity", "字幕不透明度", 0.2f, 1f, 0.05f, 1f, "")
         PrefSlider(store, "subtitle.verticalOffset", "字幕垂直偏移", -60f, 200f, 2f, 0f, " pt")

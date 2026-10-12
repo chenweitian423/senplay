@@ -553,7 +553,7 @@ struct PlayerScreen: View {
     @AppStorage(PrefKey.subtitleScale) private var subtitleScale = 1.0
     @AppStorage(PrefKey.subtitleMask) private var subtitleMask = false
     @AppStorage(PrefKey.subtitleTextColor) private var subtitleTextColor = "#FFFFFF"
-    @AppStorage(PrefKey.subtitleBgColor) private var subtitleBgColor = "#8C000000"
+    @AppStorage(PrefKey.subtitleBgColor) private var subtitleBgColor = "#00000000"
     @AppStorage(PrefKey.subtitleOpacity) private var subtitleOpacity = 1.0
     @AppStorage(PrefKey.subtitleVerticalOffset) private var subtitleVerticalOffset = 0.0
     @AppStorage(PrefKey.jpegQuality) private var jpegQuality = 0.8
@@ -715,6 +715,14 @@ struct PlayerScreen: View {
                             .font(.system(size: 18 * subtitleScale, weight: .semibold))
                             .foregroundColor(Color(hexString: subtitleTextColor))
                             .multilineTextAlignment(.center)
+                            // The reference draws subtitles as outlined text with no
+                            // background plate. SwiftUI has no text stroke, so four
+                            // offset shadows stand in for one; a colour behind the
+                            // text is still available, just off by default.
+                            .shadow(color: .black.opacity(0.95), radius: 0.7, x: 0.9, y: 0.9)
+                            .shadow(color: .black.opacity(0.95), radius: 0.7, x: -0.9, y: -0.9)
+                            .shadow(color: .black.opacity(0.95), radius: 0.7, x: 0.9, y: -0.9)
+                            .shadow(color: .black.opacity(0.95), radius: 0.7, x: -0.9, y: 0.9)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
                             .background(Color(hexString: subtitleBgColor))

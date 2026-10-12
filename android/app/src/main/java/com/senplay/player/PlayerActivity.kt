@@ -385,7 +385,7 @@ fun PlayerScreen(
     val subtitleScale = remember { store.prefFloat(P_SUBTITLE_SCALE, 1f) }
     val subtitleMask = remember { store.prefBool(P_SUBTITLE_MASK, false) }
     val subtitleTextColor = remember { store.prefString(P_SUBTITLE_TEXT_COLOR, "#FFFFFF") }
-    val subtitleBgColor = remember { store.prefString(P_SUBTITLE_BG_COLOR, "#8C000000") }
+    val subtitleBgColor = remember { store.prefString(P_SUBTITLE_BG_COLOR, "#00000000") }
     val subtitleOpacity = remember { store.prefFloat(P_SUBTITLE_OPACITY, 1f) }
     val subtitleVerticalOffset = remember { store.prefInt(P_SUBTITLE_VERTICAL_OFFSET, 0) }
     /** "记住缩放大小" — the pinch scale comes back with the next file. */
@@ -1129,10 +1129,12 @@ fun PlayerScreen(
                         captions.setStyle(
                             androidx.media3.ui.CaptionStyleCompat(
                                 subtitleColor(subtitleTextColor, android.graphics.Color.WHITE),
-                                subtitleColor(subtitleBgColor, 0x8C000000.toInt()),
+                                subtitleColor(subtitleBgColor, 0x00000000),
                                 android.graphics.Color.TRANSPARENT,
-                                androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_NONE,
-                                android.graphics.Color.WHITE,
+                                // The reference outlines its subtitles rather than
+                                // putting a plate behind them.
+                                androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE,
+                                android.graphics.Color.BLACK,
                                 null
                             )
                         )
