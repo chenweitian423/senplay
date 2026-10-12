@@ -165,4 +165,9 @@ struct PlayRequest: Equatable {
     /// Artwork address, carried so the resume shelf and the history list can keep
     /// showing the poster the browser showed after the item has been played.
     var imageURL: String? = nil
+    /// Total length, as the server reported it. The kernel reads the container header
+    /// itself, but on a stream that reading often yields nothing, and a player that
+    /// cannot say how long a film is cannot draw a scrubber for it either. This seeds
+    /// the clock until — and only until — the kernel reports its own figure.
+    var durationMs: Double = 0
 }

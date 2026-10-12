@@ -240,6 +240,8 @@ final class KernelPlayer: NSObject, ObservableObject {
     /// Set from the player screen before the layer starts.
     var preferredAudioLanguage = ""
     var preferredSubtitleLanguage = ""
+    /// Length the server reported, used until the kernel reports one of its own.
+    var seededDuration: TimeInterval = 0
     /// "记住所选字幕/音轨": the track names this file was left on, filled in by the
     /// screen before playback starts.
     var rememberedAudioTrack: String?
@@ -423,8 +425,14 @@ extension KernelPlayer: KSPlayerLayerDelegate {
 
     func player(layer: KSPlayerLayer, currentTime: TimeInterval, totalTime: TimeInterval) {
         self.currentTime = currentTime
-        if totalTime > 0 { self.totalTime = totalTime }
-        onTime?(currentTime, totalTime)
+        // The kernel's own reading wins as soon as there is one. Until then the length
+        // the server reported is what the scrubber and the right-hand clock are drawn
+        // against — KSPlayer takes its duration from the container header, which over
+        // Emby's stream endpoint frequently arrives as zero, leaving the whole bar at
+        // 00:00 while playback runs perfectly well.
+        let known = totalTime > 0 ? totalTime : seededDuration
+        if known > 0, known != self.totalTime { self.totalTime = known }
+        onTime?(currentTime, known)
     }
 
     func player(layer: KSPlayerLayer, finish error: Error?) {
@@ -1791,6 +1799,7 @@ struct PlayerScreen: View {
         options.isSeekedAutoPlay = true
 
         let player = KernelPlayer(url: url, options: options)
+        player.seededDuration = request.durationMs / 1000
         player.preferredAudioLanguage = KernelPlayer.languagePreference(preferredAudioLanguage)
         player.preferredSubtitleLanguage = KernelPlayer.languagePreference(preferredSubtitleLanguage)
         loadRememberedTracks(into: player)

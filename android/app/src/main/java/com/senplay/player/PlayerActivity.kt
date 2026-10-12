@@ -126,7 +126,9 @@ class PlayerActivity : ComponentActivity() {
         val queue: List<Pair<String, String>>,
         val cloudDrive: Boolean,
         /** Artwork the browser showed, written to the history so the shelf can reuse it. */
-        val imageUrl: String?
+        val imageUrl: String?,
+        /** Length the server reported, used until the player reads one of its own. */
+        val durationMs: Long
     )
 
     private var media by mutableStateOf<Media?>(null)
@@ -159,6 +161,7 @@ class PlayerActivity : ComponentActivity() {
                             queue = playing.queue,
                             cloudDrive = playing.cloudDrive,
                             imageUrl = playing.imageUrl,
+                            durationMs = playing.durationMs,
                             onFinish = { finish() },
                             onPlayNext = { nextUrl, nextTitle ->
                                 startActivity(
@@ -200,7 +203,8 @@ class PlayerActivity : ComponentActivity() {
             queue = intent.getStringArrayListExtra(EXTRA_QUEUE_URLS).orEmpty()
                 .zip(intent.getStringArrayListExtra(EXTRA_QUEUE_NAMES).orEmpty()),
             cloudDrive = intent.getBooleanExtra(EXTRA_CLOUD_DRIVE, false),
-            imageUrl = intent.getStringExtra(EXTRA_IMAGE_URL)
+            imageUrl = intent.getStringExtra(EXTRA_IMAGE_URL),
+            durationMs = intent.getLongExtra(EXTRA_DURATION_MS, 0L)
         )
     }
 
@@ -214,6 +218,7 @@ class PlayerActivity : ComponentActivity() {
         const val EXTRA_QUEUE_NAMES = "extra_queue_names"
         const val EXTRA_CLOUD_DRIVE = "extra_cloud_drive"
         const val EXTRA_IMAGE_URL = "extra_image_url"
+        const val EXTRA_DURATION_MS = "extra_duration_ms"
 
         fun intentFor(
             context: Context,
@@ -224,7 +229,8 @@ class PlayerActivity : ComponentActivity() {
             positionMs: Long = 0L,
             queue: List<Pair<String, String>> = emptyList(),
             cloudDrive: Boolean = false,
-            imageUrl: String? = null
+            imageUrl: String? = null,
+            durationMs: Long = 0L
         ): Intent = Intent(context, PlayerActivity::class.java).apply {
             putExtra(EXTRA_URL, url)
             putExtra(EXTRA_NAME, name)
@@ -237,6 +243,7 @@ class PlayerActivity : ComponentActivity() {
                 putStringArrayListExtra(EXTRA_QUEUE_NAMES, ArrayList(queue.map { it.second }))
             }
             imageUrl?.let { putExtra(EXTRA_IMAGE_URL, it) }
+            if (durationMs > 0) putExtra(EXTRA_DURATION_MS, durationMs)
         }
     }
 }
@@ -380,6 +387,8 @@ fun PlayerScreen(
     cloudDrive: Boolean = false,
     /** Artwork for the history row this playback writes, when the caller knew an address. */
     imageUrl: String? = null,
+    /** Length the server reported, for the clock until the player reads its own. */
+    durationMs: Long = 0L,
     onFinish: () -> Unit,
     onPlayNext: (String, String) -> Unit = { _, _ -> }
 ) {
@@ -397,7 +406,10 @@ fun PlayerScreen(
     var controlsVisible by remember { mutableStateOf(true) }
     var isPlaying by remember { mutableStateOf(true) }
     var position by remember { mutableStateOf(0L) }
-    var duration by remember { mutableStateOf(0L) }
+    // Seeded with the length the server reported: Media3's own reading can stay unknown
+    // over a stream, and the poll below only overwrites this once it has a figure —
+    // without the seed the whole bar sits at 00:00 while playback runs fine.
+    var duration by remember { mutableStateOf(durationMs) }
     var scrubbing by remember { mutableStateOf(false) }
     var scrubTarget by remember { mutableStateOf(0f) }
     var hud by remember { mutableStateOf<String?>(null) }

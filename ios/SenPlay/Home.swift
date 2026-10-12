@@ -79,7 +79,7 @@ struct HomeTabView: View {
     private func resumeCard(_ entry: HistoryEntry) -> some View {
         Button {
             pending = PlayRequest(url: entry.url, name: entry.name, positionMs: entry.positionMs,
-                                  imageURL: entry.imageURL)
+                                  imageURL: entry.imageURL, durationMs: entry.durationMs)
         } label: {
             VStack(alignment: .leading, spacing: 6) {
                 ZStack(alignment: .bottomLeading) {

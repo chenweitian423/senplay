@@ -80,7 +80,8 @@ fun HomeTabScreen(
                                 url = entry.url,
                                 name = entry.name,
                                 positionMs = entry.positionMs,
-                                imageUrl = entry.imageUrl
+                                imageUrl = entry.imageUrl,
+                                durationMs = entry.durationMs
                             )
                         )
                     }

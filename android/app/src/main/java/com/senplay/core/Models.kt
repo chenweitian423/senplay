@@ -109,5 +109,12 @@ data class PlayRequest(
      */
     val isCloudDrive: Boolean = false,
     /** Artwork address, so the resume shelf keeps the poster the browser showed. */
-    val imageUrl: String? = null
+    val imageUrl: String? = null,
+    /**
+     * Total length as the server reported it. Media3 reads the container itself, but
+     * over a stream that can come back unknown, and a player that cannot say how long
+     * a film is cannot draw a scrubber for it either. This seeds the bar until — and
+     * only until — the player reports a figure of its own.
+     */
+    val durationMs: Long = 0L
 )

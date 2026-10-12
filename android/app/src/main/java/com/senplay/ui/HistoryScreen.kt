@@ -116,7 +116,9 @@ fun HistoryScreen(store: LibraryStore, onPlay: (PlayRequest) -> Unit) {
                             url = entry.url,
                             name = entry.name,
                             positionMs = entry.positionMs,
-                            queue = history.map { it.url to it.name }
+                            queue = history.map { it.url to it.name },
+                            imageUrl = entry.imageUrl,
+                            durationMs = entry.durationMs
                         )
                     )
                 }

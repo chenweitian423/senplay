@@ -756,7 +756,8 @@ struct ServerBrowserView: View {
                 headers: plex?.mediaHeaders() ?? [:],
                 positionMs: entry.positionMs,
                 queue: siblings,
-                imageURL: entry.imageURL
+                imageURL: entry.imageURL,
+                durationMs: entry.durationMs
             )
             return
         }
@@ -773,7 +774,8 @@ struct ServerBrowserView: View {
                 headers: client.mediaHeaders(),
                 positionMs: entry.positionMs,
                 queue: siblings,
-                imageURL: entry.imageURL
+                imageURL: entry.imageURL,
+                durationMs: entry.durationMs
             )
         } else {
             pending = PlayRequest(
@@ -782,7 +784,8 @@ struct ServerBrowserView: View {
                 subtitleURL: matchingSubtitle(for: entry, emby: nil),
                 positionMs: LibraryStore.shared.savedPosition(url: entry.url),
                 queue: siblings,
-                imageURL: entry.imageURL
+                imageURL: entry.imageURL,
+                durationMs: entry.durationMs
             )
         }
     }

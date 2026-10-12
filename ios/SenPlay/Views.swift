@@ -106,7 +106,9 @@ struct HistoryView: View {
                             url: entry.url,
                             name: entry.name,
                             positionMs: entry.positionMs,
-                            queue: store.history.map { QueueItem(url: $0.url, name: $0.name) }
+                            queue: store.history.map { QueueItem(url: $0.url, name: $0.name) },
+                            imageURL: entry.imageURL,
+                            durationMs: entry.durationMs
                         )
                     } label: {
                         VStack(alignment: .leading, spacing: 6) {

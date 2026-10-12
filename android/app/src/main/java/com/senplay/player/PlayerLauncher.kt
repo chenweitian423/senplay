@@ -16,7 +16,8 @@ object PlayerLauncher {
                 positionMs = request.positionMs,
                 queue = request.queue,
                 cloudDrive = request.isCloudDrive,
-                imageUrl = request.imageUrl
+                imageUrl = request.imageUrl,
+                durationMs = request.durationMs
             )
         )
     }
