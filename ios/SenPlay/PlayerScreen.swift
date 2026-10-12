@@ -1034,73 +1034,27 @@ struct PlayerScreen: View {
                         .foregroundColor(.white)
                 }
 
-                HStack(spacing: 20) {
-                    Button { close() } label: { Image(systemName: "xmark") }
-                    if fastSeekButtons {
-                        Button { seek(by: -Double(backwardSeconds)) } label: { Image(systemName: "gobackward.15") }
+                if isLandscape {
+                    HStack(spacing: 20) { controlButtons }
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 18)
+                        .padding(.bottom, 12)
+                } else {
+                    // Portrait: the reference runs the controls down the left edge
+                    // rather than across the bottom, which is what leaves the
+                    // scrubber its full width.
+                    HStack(alignment: .bottom, spacing: 12) {
+                        VStack(spacing: 14) { controlButtons }
+                        Spacer(minLength: 0)
                     }
-                    if showPlayButton {
-                        Button { togglePlayPause() } label: {
-                            Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 24, weight: .semibold))
-                        }
-                    }
-                    if fastSeekButtons {
-                        Button { seek(by: Double(forwardSeconds)) } label: { Image(systemName: "goforward.15") }
-                    }
-                    if switchMediaButton {
-                        Button { switchToNextMedia() } label: {
-                            Image(systemName: "rectangle.stack")
-                        }
-                    }
-
-                    Spacer()
-
-                    if showSpeedButton {
-                        Menu {
-                            ForEach(speeds, id: \.self) { value in
-                                Button(value == 1 ? "1.0x（默认）" : String(format: "%.2fx", value)) {
-                                    setSpeed(value)
-                                    toast = String(format: "倍速 %.2fx", value)
-                                    scheduleToastClear()
-                                }
-                            }
-                        } label: {
-                            Text(speed == 1 ? "1.0x" : String(format: "%.2fx", speed))
-                                .font(.system(size: 15, weight: .semibold))
-                        }
-                    }
-
-                    // The reference puts cast in the control bar; here it only lived
-                    // in the more panel, one level deeper than it needs to be.
-                    Button {
-                        kernel?.setExternalPlayback(true)
-                        toast = "已开启外部播放，请在控制中心选择设备"
-                        scheduleToastClear()
-                    } label: {
-                        Image(systemName: "airplayvideo")
-                    }
-                    Button { locked.toggle() } label: {
-                        Image(systemName: locked ? "lock.fill" : "lock.open")
-                    }
-                    // The reference keeps the queue at the right of the transport row.
-                    Button { activePanel = .queue } label: { Image(systemName: "list.bullet") }
-                    Button { activePanel = .subtitle } label: { Image(systemName: "captions.bubble") }
-                    // The reference keeps a danmaku toggle in the control bar. With only
-                    // the setting, turning it off mid-playback meant leaving the player.
-                    Button { danmakuEnabled.toggle() } label: {
-                        Image(systemName: danmakuEnabled ? "text.bubble.fill" : "text.bubble")
-                    }
-                    Button { activePanel = .audio } label: { Image(systemName: "waveform") }
-                    if showAspectRatioButton {
-                        Button { activePanel = .aspect } label: { Image(systemName: "aspectratio") }
-                    }
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.white)
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 12)
                 }
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundColor(.white)
-                .buttonStyle(.plain)
-                .padding(.horizontal, 18)
-                .padding(.bottom, 12)
             }
             .padding(.vertical, 10)
             .background(
@@ -1128,6 +1082,72 @@ struct PlayerScreen: View {
             .font(.system(size: 11, weight: .medium))
             .foregroundColor(.white.opacity(0.85))
         }
+    }
+
+    /// The control buttons, without a layout of their own: a row in landscape, a
+    /// column in portrait. Written once so the two orientations cannot drift apart.
+    @ViewBuilder
+    private var controlButtons: some View {
+                Button { close() } label: { Image(systemName: "xmark") }
+                if fastSeekButtons {
+                    Button { seek(by: -Double(backwardSeconds)) } label: { Image(systemName: "gobackward.15") }
+                }
+                if showPlayButton {
+                    Button { togglePlayPause() } label: {
+                        Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 24, weight: .semibold))
+                    }
+                }
+                if fastSeekButtons {
+                    Button { seek(by: Double(forwardSeconds)) } label: { Image(systemName: "goforward.15") }
+                }
+                if switchMediaButton {
+                    Button { switchToNextMedia() } label: {
+                        Image(systemName: "rectangle.stack")
+                    }
+                }
+
+                Spacer()
+
+                if showSpeedButton {
+                    Menu {
+                        ForEach(speeds, id: \.self) { value in
+                            Button(value == 1 ? "1.0x（默认）" : String(format: "%.2fx", value)) {
+                                setSpeed(value)
+                                toast = String(format: "倍速 %.2fx", value)
+                                scheduleToastClear()
+                            }
+                        }
+                    } label: {
+                        Text(speed == 1 ? "1.0x" : String(format: "%.2fx", speed))
+                            .font(.system(size: 15, weight: .semibold))
+                    }
+                }
+
+                // The reference puts cast in the control bar; here it only lived
+                // in the more panel, one level deeper than it needs to be.
+                Button {
+                    kernel?.setExternalPlayback(true)
+                    toast = "已开启外部播放，请在控制中心选择设备"
+                    scheduleToastClear()
+                } label: {
+                    Image(systemName: "airplayvideo")
+                }
+                Button { locked.toggle() } label: {
+                    Image(systemName: locked ? "lock.fill" : "lock.open")
+                }
+                // The reference keeps the queue at the right of the transport row.
+                Button { activePanel = .queue } label: { Image(systemName: "list.bullet") }
+                Button { activePanel = .subtitle } label: { Image(systemName: "captions.bubble") }
+                // The reference keeps a danmaku toggle in the control bar. With only
+                // the setting, turning it off mid-playback meant leaving the player.
+                Button { danmakuEnabled.toggle() } label: {
+                    Image(systemName: danmakuEnabled ? "text.bubble.fill" : "text.bubble")
+                }
+                Button { activePanel = .audio } label: { Image(systemName: "waveform") }
+                if showAspectRatioButton {
+                    Button { activePanel = .aspect } label: { Image(systemName: "aspectratio") }
+                }
     }
 
     private var scrubber: some View {

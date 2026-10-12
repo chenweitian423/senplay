@@ -1279,68 +1279,142 @@ fun PlayerScreen(
                         }
                     )
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.35f))
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = onFinish) {
-                        Icon(Icons.Filled.Close, contentDescription = "关闭", tint = Color.White)
-                    }
-                    Text(
-                        text = name,
-                        color = Color.White,
-                        fontSize = 15.sp,
-                        maxLines = 1,
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (showScreenshot) {
-                        IconButton(onClick = { captureFrame(playerView) }) {
-                            Icon(Icons.Filled.PhotoCamera, contentDescription = "截图", tint = Color.White)
+                // Landscape keeps the controls across the top, where the reference
+                // puts them; portrait runs them down the left edge, which is what
+                // leaves the scrubber its full width.
+                if (isLandscape) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.Black.copy(alpha = 0.35f))
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = onFinish) {
+                            Icon(Icons.Filled.Close, contentDescription = "关闭", tint = Color.White)
                         }
-                    }
-                    Box {
-                        IconButton(onClick = { moreMenuOpen = true }) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = "更多", tint = Color.White)
+                        Text(
+                            text = name,
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            maxLines = 1,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (showScreenshot) {
+                            IconButton(onClick = { captureFrame(playerView) }) {
+                                Icon(Icons.Filled.PhotoCamera, contentDescription = "截图", tint = Color.White)
+                            }
                         }
-                        DropdownMenu(expanded = moreMenuOpen, onDismissRequest = { moreMenuOpen = false }) {
-                            DropdownMenuItem(
-                                text = { Text("截图") },
-                                onClick = { moreMenuOpen = false; captureFrame(playerView) }
-                            )
-                            // Both of these used to just close the menu. The info panel
-                            // reuses the counters the service already collects; the
-                            // aspect picker maps onto the view's own resize modes.
-                            DropdownMenuItem(
-                                text = { Text(if (showOSD) "隐藏媒体信息" else "媒体信息") },
-                                onClick = { moreMenuOpen = false; showOSD = !showOSD }
-                            )
-                            if (showAspectRatioButton) {
+                        Box {
+                            IconButton(onClick = { moreMenuOpen = true }) {
+                                Icon(Icons.Filled.MoreVert, contentDescription = "更多", tint = Color.White)
+                            }
+                            DropdownMenu(expanded = moreMenuOpen, onDismissRequest = { moreMenuOpen = false }) {
                                 DropdownMenuItem(
-                                    text = { Text("画面比例") },
-                                    onClick = { moreMenuOpen = false; aspectMenuOpen = true }
+                                    text = { Text("截图") },
+                                    onClick = { moreMenuOpen = false; captureFrame(playerView) }
+                                )
+                                // Both of these used to just close the menu. The info panel
+                                // reuses the counters the service already collects; the
+                                // aspect picker maps onto the view's own resize modes.
+                                DropdownMenuItem(
+                                    text = { Text(if (showOSD) "隐藏媒体信息" else "媒体信息") },
+                                    onClick = { moreMenuOpen = false; showOSD = !showOSD }
+                                )
+                                if (showAspectRatioButton) {
+                                    DropdownMenuItem(
+                                        text = { Text("画面比例") },
+                                        onClick = { moreMenuOpen = false; aspectMenuOpen = true }
+                                    )
+                                }
+                                DropdownMenuItem(
+                                    text = { Text(if (showOSD) "隐藏状态信息" else "显示状态信息") },
+                                    onClick = {
+                                        moreMenuOpen = false
+                                        showOSD = !showOSD
+                                        store.setPrefBool(P_SHOW_OSD, showOSD)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(if (castTarget == null) "投屏" else "投屏到 ${castTarget?.name}")
+                                    },
+                                    onClick = {
+                                        moreMenuOpen = false
+                                        castOpen = true
+                                    }
                                 )
                             }
-                            DropdownMenuItem(
-                                text = { Text(if (showOSD) "隐藏状态信息" else "显示状态信息") },
-                                onClick = {
-                                    moreMenuOpen = false
-                                    showOSD = !showOSD
-                                    store.setPrefBool(P_SHOW_OSD, showOSD)
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = {
-                                    Text(if (castTarget == null) "投屏" else "投屏到 ${castTarget?.name}")
-                                },
-                                onClick = {
-                                    moreMenuOpen = false
-                                    castOpen = true
-                                }
-                            )
                         }
+                    }
+                } else {
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color.Black.copy(alpha = 0.35f))
+                                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                            ) {
+                                IconButton(onClick = onFinish) {
+                                    Icon(Icons.Filled.Close, contentDescription = "关闭", tint = Color.White)
+                                }
+                                Text(
+                                    text = name,
+                                    color = Color.White,
+                                    fontSize = 15.sp,
+                                    maxLines = 1,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (showScreenshot) {
+                                    IconButton(onClick = { captureFrame(playerView) }) {
+                                        Icon(Icons.Filled.PhotoCamera, contentDescription = "截图", tint = Color.White)
+                                    }
+                                }
+                                Box {
+                                    IconButton(onClick = { moreMenuOpen = true }) {
+                                        Icon(Icons.Filled.MoreVert, contentDescription = "更多", tint = Color.White)
+                                    }
+                                    DropdownMenu(expanded = moreMenuOpen, onDismissRequest = { moreMenuOpen = false }) {
+                                        DropdownMenuItem(
+                                            text = { Text("截图") },
+                                            onClick = { moreMenuOpen = false; captureFrame(playerView) }
+                                        )
+                                        // Both of these used to just close the menu. The info panel
+                                        // reuses the counters the service already collects; the
+                                        // aspect picker maps onto the view's own resize modes.
+                                        DropdownMenuItem(
+                                            text = { Text(if (showOSD) "隐藏媒体信息" else "媒体信息") },
+                                            onClick = { moreMenuOpen = false; showOSD = !showOSD }
+                                        )
+                                        if (showAspectRatioButton) {
+                                            DropdownMenuItem(
+                                                text = { Text("画面比例") },
+                                                onClick = { moreMenuOpen = false; aspectMenuOpen = true }
+                                            )
+                                        }
+                                        DropdownMenuItem(
+                                            text = { Text(if (showOSD) "隐藏状态信息" else "显示状态信息") },
+                                            onClick = {
+                                                moreMenuOpen = false
+                                                showOSD = !showOSD
+                                                store.setPrefBool(P_SHOW_OSD, showOSD)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(if (castTarget == null) "投屏" else "投屏到 ${castTarget?.name}")
+                                            },
+                                            onClick = {
+                                                moreMenuOpen = false
+                                                castOpen = true
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.weight(1f))
                     }
                 }
 
