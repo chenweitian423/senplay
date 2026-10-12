@@ -682,13 +682,14 @@ struct PlayerScreen: View {
     private let speeds: [Float] = [0.5, 0.75, 1, 1.25, 1.5, 2, 3]
 
     private enum PanelKind: String, Identifiable {
-        case subtitle, audio, aspect, more
+        case subtitle, audio, aspect, queue, more
         var id: String { rawValue }
         var title: String {
             switch self {
             case .subtitle: return "字幕"
             case .audio: return "音轨"
             case .aspect: return "画面比例"
+            case .queue: return "播放队列"
             case .more: return "更多"
             }
         }
@@ -1073,6 +1074,8 @@ struct PlayerScreen: View {
                     Button { locked.toggle() } label: {
                         Image(systemName: locked ? "lock.fill" : "lock.open")
                     }
+                    // The reference keeps the queue at the right of the transport row.
+                    Button { activePanel = .queue } label: { Image(systemName: "list.bullet") }
                     Button { activePanel = .subtitle } label: { Image(systemName: "captions.bubble") }
                     // The reference keeps a danmaku toggle in the control bar. With only
                     // the setting, turning it off mid-playback meant leaving the player.
@@ -1203,6 +1206,28 @@ struct PlayerScreen: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         switch panel {
+                        case .queue:
+                            // Jumping to an entry reuses the same path the automatic
+                            // advance takes: seed upNext and let advance() build the
+                            // request, so a manual pick and an automatic one behave
+                            // identically.
+                            if request.queue.isEmpty {
+                                Text("当前没有播放队列").font(.footnote)
+                                    .foregroundColor(.secondary).padding()
+                            }
+                            ForEach(Array(request.queue.enumerated()), id: \.offset) { _, item in
+                                let isCurrent = item.url == request.url
+                                trackButton(TrackRow(id: item.url.hashValue,
+                                                     title: item.name,
+                                                     subtitle: isCurrent ? "正在播放" : "",
+                                                     selected: isCurrent,
+                                                     name: item.url)) {
+                                    activePanel = nil
+                                    guard !isCurrent else { return }
+                                    upNext = item
+                                    advance()
+                                }
+                            }
                         case .subtitle:
                             ForEach(subtitleRows()) { row in
                                 trackButton(row) { selectSubtitle(byName: row.name) }

@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Comment
@@ -347,7 +348,7 @@ private fun subtitleColor(value: String, fallback: Int): Int =
  * The same three modes the iOS side offers, mapped onto the view's own resize modes
  * rather than a scale transform of our own.
  */
-private enum class TrackPanel { SUBTITLE, AUDIO }
+private enum class TrackPanel { SUBTITLE, AUDIO, QUEUE }
 
 private enum class AspectMode(val title: String, val resizeMode: Int) {
     FIT("适应屏幕", androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT),
@@ -1054,6 +1055,34 @@ fun PlayerScreen(
     ) {
         var playerView by remember { mutableStateOf<PlayerView?>(null) }
         trackPanel?.let { panel ->
+            // The reference's queue button opens the play queue. Jumping to an entry
+            // is not wired here: this activity receives the queue through its launch
+            // intent, so a jump means re-entering through that path rather than
+            // seeking the current player. Showing the list and which entry is playing
+            // is what this panel can honestly do today.
+            if (panel == TrackPanel.QUEUE) {
+                val currentUrl = player.currentMediaItem?.localConfiguration?.uri?.toString()
+                AlertDialog(
+                    onDismissRequest = { trackPanel = null },
+                    title = { Text("播放队列") },
+                    text = {
+                        Column {
+                            if (queue.isEmpty()) {
+                                Text("当前没有播放队列")
+                            }
+                            queue.forEach { (url, name) ->
+                                TextButton(onClick = { trackPanel = null }) {
+                                    Text(if (url == currentUrl) "$name（正在播放）" else name)
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { trackPanel = null }) { Text("关闭") }
+                    }
+                )
+                return@let
+            }
             val isSubtitle = panel == TrackPanel.SUBTITLE
             val options = tracksOf(if (isSubtitle) C.TRACK_TYPE_TEXT else C.TRACK_TYPE_AUDIO)
             AlertDialog(
@@ -1463,6 +1492,9 @@ fun PlayerScreen(
                                 contentDescription = "弹幕",
                                 tint = Color.White
                             )
+                        }
+                        IconButton(onClick = { trackPanel = TrackPanel.QUEUE }) {
+                            Icon(Icons.Filled.List, contentDescription = "播放队列", tint = Color.White)
                         }
                         IconButton(onClick = { trackPanel = TrackPanel.AUDIO }) {
                             Icon(Icons.Filled.Audiotrack, contentDescription = "音轨", tint = Color.White)
