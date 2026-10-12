@@ -57,6 +57,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.senplay.core.FileCategory
 import com.senplay.core.LibraryStore
 import com.senplay.core.MediaEntry
 import com.senplay.core.PlayRequest
@@ -314,10 +315,12 @@ private fun ServerBrowserScreen(
     }
 
     val query = search.trim()
-    val visible = if (query.isEmpty()) {
-        entries
-    } else {
-        entries.filter { it.name.contains(query, ignoreCase = true) }
+    // "文件类型": folders are never filtered — hiding them would make a deep tree
+    // unreachable.
+    val enabledTypes = FileCategory.enabled(prefs)
+    val visible = entries.filter { entry ->
+        (entry.isDirectory || FileCategory.of(entry.name) in enabledTypes) &&
+            (query.isEmpty() || entry.name.contains(query, ignoreCase = true))
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {

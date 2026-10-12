@@ -140,12 +140,25 @@ private struct ListPrefs: View {
     @AppStorage("pref.list.showFrameRate") private var showFrameRate = true
     @AppStorage("pref.list.showResolution") private var showResolution = true
     @AppStorage("pref.list.simplifyResolution") private var simplifyResolution = true
+    // "文件类型" — the reference app's kFileTypeShowVideo and friends.
+    @AppStorage("pref.list.fileType.video") private var showVideoFiles = true
+    @AppStorage("pref.list.fileType.music") private var showMusicFiles = true
+    @AppStorage("pref.list.fileType.picture") private var showPictureFiles = true
+    @AppStorage("pref.list.fileType.subtitle") private var showSubtitleFiles = true
+    @AppStorage("pref.list.fileType.other") private var showOtherFiles = true
 
     var body: some View {
         List {
             Section {
                 Text("对 Nas/本地/网盘列表生效")
                     .font(.footnote).foregroundColor(.secondary)
+            }
+            Section(header: Text("文件类型")) {
+                Toggle("视频", isOn: $showVideoFiles)
+                Toggle("音乐", isOn: $showMusicFiles)
+                Toggle("图片", isOn: $showPictureFiles)
+                Toggle("字幕", isOn: $showSubtitleFiles)
+                Toggle("其他", isOn: $showOtherFiles)
             }
             Section {
                 Toggle("标题栏显示文件数量", isOn: $showCount)

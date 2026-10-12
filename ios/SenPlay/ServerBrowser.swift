@@ -9,6 +9,54 @@ import SwiftUI
 /// Which of the list-detail toggles are on. Read once when the browser opens; the
 /// row body uses them to decide what to draw rather than laying out everything and
 /// hiding it.
+/// The file-type groups a listing can be filtered by.
+///
+/// The reference app has a switch per group (`kFileTypeShowVideo`, `kFileTypeShowMusic`,
+/// `kFileTypeShowPicture`, `kFileTypeShowSubtitle`, `kFileTypeShowOther`). A listing has
+/// only the name to go on before a file is opened, so the extension decides. The
+/// extension sets are the same on both platforms, so the two filter alike.
+enum FileCategory: String, CaseIterable {
+    case video, music, picture, subtitle, other
+
+    /// Spelled out rather than interpolated: the audit compares platforms by literal
+    /// key, and an interpolated one would be invisible to it.
+    var key: String {
+        switch self {
+        case .video: return "pref.list.fileType.video"
+        case .music: return "pref.list.fileType.music"
+        case .picture: return "pref.list.fileType.picture"
+        case .subtitle: return "pref.list.fileType.subtitle"
+        case .other: return "pref.list.fileType.other"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .video: return "视频"
+        case .music: return "音乐"
+        case .picture: return "图片"
+        case .subtitle: return "字幕"
+        case .other: return "其他"
+        }
+    }
+
+    private static let extensions: [FileCategory: Set<String>] = [
+        .video: ["mp4", "mkv", "mov", "m4v", "avi", "flv", "ts", "webm", "mpg", "mpeg",
+                 "rmvb", "rm", "wmv", "3gp", "m2ts", "iso", "asf", "vob", "ogv"],
+        .music: ["mp3", "flac", "aac", "wav", "m4a", "ogg", "ape", "wma", "opus", "aiff"],
+        .picture: ["jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "heif", "tiff"],
+        .subtitle: ["srt", "ass", "ssa", "vtt", "sub", "idx", "sup", "smi", "ttml"],
+    ]
+
+    static func of(_ name: String) -> FileCategory {
+        let ext = (name as NSString).pathExtension.lowercased()
+        for category in allCases where extensions[category]?.contains(ext) == true {
+            return category
+        }
+        return .other
+    }
+}
+
 private struct ListDisplay {
     var showSize = true
     var showDuration = true
@@ -54,6 +102,14 @@ private struct ListDisplay {
     /// the settings screen it belongs to is not in the spec, so the default follows
     /// the rest of the artwork group, which is on.
     var showPlayButton = true
+    /// "文件类型" — which groups a listing shows. Folders are never filtered: hiding
+    /// them would make a deep tree unreachable.
+    var fileTypes: Set<FileCategory> = Set(FileCategory.allCases)
+
+    /// Whether a listing entry survives the file-type switches.
+    func allows(_ entry: MediaEntry) -> Bool {
+        entry.isDirectory || fileTypes.contains(FileCategory.of(entry.name))
+    }
 
     init(_ defaults: UserDefaults = .standard) {
         showSize = defaults.object(forKey: "pref.list.showSize") as? Bool ?? true
@@ -86,6 +142,9 @@ private struct ListDisplay {
             defaults.object(forKey: "pref.library.hidePlayedInLatest") as? Bool ?? false
         showPlayButton =
             defaults.object(forKey: "pref.library.displayPlayButton") as? Bool ?? true
+        fileTypes = Set(FileCategory.allCases.filter {
+            defaults.object(forKey: $0.key) as? Bool ?? true
+        })
     }
 }
 
@@ -308,8 +367,11 @@ struct ServerBrowserView: View {
 
     private var visibleEntries: [MediaEntry] {
         let query = search.trimmingCharacters(in: .whitespaces)
-        guard !query.isEmpty else { return entries }
-        return entries.filter { $0.name.localizedCaseInsensitiveContains(query) }
+        return entries.filter { entry in
+            guard display.allows(entry) else { return false }
+            guard !query.isEmpty else { return true }
+            return entry.name.localizedCaseInsensitiveContains(query)
+        }
     }
 
     // MARK: cells

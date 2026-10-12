@@ -89,6 +89,15 @@ fun SettingsScreen(store: LibraryStore) {
             listOf("left" to "左边", "right" to "右边"), "right"
         )
 
+        // "文件类型" — the reference app's kFileTypeShowVideo and friends. Folders are
+        // never filtered, so a deep tree stays reachable.
+        GroupHeader("文件类型")
+        PrefSwitch(store, "list.fileType.video", "视频", null, true)
+        PrefSwitch(store, "list.fileType.music", "音乐", null, true)
+        PrefSwitch(store, "list.fileType.picture", "图片", null, true)
+        PrefSwitch(store, "list.fileType.subtitle", "字幕", null, true)
+        PrefSwitch(store, "list.fileType.other", "其他", null, true)
+
         // -------------------------------------------------------------- 媒体库
         GroupHeader("媒体库")
         Text(
