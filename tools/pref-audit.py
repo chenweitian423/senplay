@@ -25,7 +25,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 IOS_SETTINGS_UI = {"Preferences.swift"}
 ANDROID_SETTINGS_UI = {"SettingsScreen.kt"}
 
-IOS_DECL = re.compile(r'static let (\w+) = "([^"]+)"')
+IOS_DECL = re.compile(r'static let (\w+) = "(pref\.[^"]*)"')
 # @AppStorage("pref.x") names a key inline rather than through PrefKey.
 IOS_LITERAL = re.compile(r'@AppStorage\("([^"]+)"\)')
 # UserDefaults read directly rather than through a property wrapper. The browser
@@ -130,11 +130,25 @@ def main() -> int:
 
     android = android_live()
 
-    # Only preference keys. The direct-read pattern also catches storage keys like
-    # "servers.v1" and the user-agent string, which are not settings at all and were
-    # padding the report with things nobody expects to find in a settings screen.
-    all_keys = sorted(k for k in set(ios) | set(android) if k.startswith("pref."))
+    # Only preference keys, and only the ones a settings screen could show. The
+    # direct-read pattern also catches storage keys like "servers.v1", the user-agent
+    # string, and the danmaku endpoint templates that are built per slot — none of
+    # those is a setting, and leaving them in padded the report with rows nobody
+    # expects to find in a settings screen. The templates are recognisable by the
+    # interpolation they still carry.
+    all_keys = sorted(
+        k for k in set(ios) | set(android)
+        if k.startswith("pref.") and "$" not in k and "\\(" not in k
+    )
     dead = [k for k in all_keys if not ios.get(k) and not android.get(k)]
+
+    # Keys one platform reads and the other does not. The dead list above is an
+    # intersection, so a key that only one side wired appears nowhere at all: that is
+    # how iOS's showStartTitle and showSkipTip stayed unread for rounds while the
+    # report looked clean. Single-sided is not automatically wrong — SMB and SFTP are
+    # Android-only on purpose — but it has to be a decision rather than an omission,
+    # so it belongs in the output.
+    one_sided = sorted(k for k in all_keys if bool(ios.get(k)) != bool(android.get(k)))
 
     print(f"keys with a real read on iOS:     {sum(1 for k in ios if ios[k])}")
     print(f"keys with a real read on Android: {sum(1 for k in android if android[k])}")
@@ -147,6 +161,13 @@ def main() -> int:
         if key in android:
             sides.append("android")
         print(f"  {key:<46} {'/'.join(sides)}")
+
+    print()
+    print(f"--- read on one platform only ({len(one_sided)}) ---")
+    for key in one_sided:
+        reader = "ios" if ios.get(key) else "android"
+        silent = "android" if reader == "ios" else "ios"
+        print(f"  {key:<46} {reader} reads it, {silent} does not")
     return 0
 
 

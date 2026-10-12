@@ -15,7 +15,7 @@
 
 ## 当前状态
 
-keys with a real read on iOS:     95
+keys with a real read on iOS:     89
 keys with a real read on Android: 79
 --- declared, shown in settings, read by nothing else (20) ---
 
@@ -283,9 +283,9 @@ Activity；singleTop 让这个 intent 复用已有实例，于是走 `onNewInten
 界面。这样切集变成同一 Activity 内换媒体，`video.switchBlackout` 也才有了真正的落点
 （同一块 PlayerView 重置时保不保留上一帧）。
 
-## `pref-audit.py` 的第五个盲点（round 41）
+## `pref-audit.py` 的第五个盲点，和修好之后露出来的东西（round 42）
 
-这一轮顺手核对时发现：iOS 的 `ui.showStartTitle` 和 `ui.showSkipTip` 只在设置页出现，
+上一轮顺手核对时发现：iOS 的 `ui.showStartTitle` 和 `ui.showSkipTip` 只在设置页出现，
 播放器里一次都没读——但它们在报告里**不是死键**。
 
 原因是判据最后一步：
@@ -296,5 +296,43 @@ dead = [k for k in all_keys if not ios.get(k) and not android.get(k)]
 
 「两端都没读」才算死。单端缺一个，报告一声不响。这两个键 Android 读了，于是整条记录
 消失，看起来双端都好。这个工具的每一次出错都是同一个形状：**判据比现实窄，缺口就
-隐身**。要补的是按端输出「只有一端接了」的清单，而不是继续用「两端取交集」当结论。
+隐身**。
+
+现在它多输出一段「只有一端接了」，并顺手收掉了判据里两处过宽（第六次修正）：
+
+- `IOS_DECL` 原本匹配所有 `static let X = "…"`，把 user-agent 和 `servers.v1` 这类
+  存储键也当了偏好键——现在只认 `pref.` 开头的值。
+- `pref.danmaku.endpoint.\(index)` 这种按槽位拼出来的键不是设置项，按插值符排除。
+
+改完先验了两个已知项：`pref.subtitle.bold`（已知死键）仍在死键表里，
+`pref.list.rounded`（已知活键）不再出现在死键表、而是出现在新的单端表里。死键总数
+20，与收窄前一致——判据变严没有误伤。
+
+**露出来的 20 个单端键**（工具只给候选，不给结论：有些是刻意的平台差异，其余是真的漏）：
+
+| 只有 iOS 读 | 只有 Android 读 |
+|---|---|
+| `audio.rememberTrack` | `iptv.channels` |
+| `gesture.longPressSpeed` | `iptv.sources` |
+| `gesture.longPressLeftSpeed` | `ui.autoFullScreen` |
+| `gesture.longPressRightSpeed` | `ui.showSkipTip` |
+| `gesture.rememberZoomSize` | `ui.showStartTitle` |
+| `list.rounded` | |
+| `play.accurateSeek` | |
+| `subtitle.mask` | |
+| `subtitle.rememberTrack` | |
+| `subtitle.scale` | |
+| `ui.switchMediaButton` | |
+| `video.hardwareDecode` | |
+| `video.hdrMetadata` | |
+| `video.upscaling` | |
+| `video.decodeThreads` | |
+
+**`video.decodeThreads` 是已知的平台差异**（Media3 没有软解线程数这个设置），
+`gesture.longPressLeftSpeed` / `longPressRightSpeed` 属于上面写的「无落点」一类
+（需要按键重复事件）。剩下的十四条要在下一轮里一条条查：`list.rounded` 和
+`play.accurateSeek` 这类，Android 侧多半只是没把值接上。
+
+**这张表改变了一件事**：此前「双端键串对齐、默认值零处不一致」这句话是对的，但它
+只保证了**设置页长得一样**。有没有真的生效，是另一条轴——而这条轴上两端并不齐。
 
