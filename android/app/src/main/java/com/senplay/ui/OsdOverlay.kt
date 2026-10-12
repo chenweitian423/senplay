@@ -24,7 +24,10 @@ data class OsdStats(
     val audioBitrate: Int = 0,
     val dropped: Int = 0,
     val width: Int = 0,
-    val height: Int = 0
+    val height: Int = 0,
+    val frameRate: Float = 0f,
+    /** Bits a second, as the loader estimates them. */
+    val bandwidth: Long = 0
 )
 
 @Composable
@@ -36,17 +39,24 @@ fun OsdOverlay(
     systemTime: String? = null,
     modifier: Modifier = Modifier
 ) {
+    // The reference's three sit on one line: clock, frame rate, network rate.
+    val headline = buildList {
+        systemTime?.let { add(it) }
+        if (stats.frameRate > 0f) {
+            add(String.format(java.util.Locale.US, "FPS %.0f", stats.frameRate))
+        }
+        if (stats.bandwidth > 0) add(rate(stats.bandwidth))
+    }
     val lines = buildList {
         if (stats.width > 0 && stats.height > 0) add("画面 ${stats.width}x${stats.height}")
         if (stats.videoBitrate > 0) add("视频 ${bitrate(stats.videoBitrate)}")
         if (stats.audioBitrate > 0) add("音频 ${bitrate(stats.audioBitrate)}")
         if (stats.dropped > 0) add("丢帧 ${stats.dropped}")
         add("缓冲 ${(bufferedMs - positionMs).coerceAtLeast(0) / 1000}s")
-        // "OSD显示播放速度" and "OSD显示系统时间"
+        // "OSD显示播放速度"
         if (playSpeed != null && playSpeed != 1f) {
             add(String.format(java.util.Locale.US, "倍速 %.2fx", playSpeed))
         }
-        systemTime?.let { add(it) }
     }
 
     Column(
@@ -57,6 +67,18 @@ fun OsdOverlay(
             .background(Color.Black.copy(alpha = 0.45f))
             .padding(8.dp)
     ) {
+        if (headline.isNotEmpty()) {
+            androidx.compose.foundation.layout.Row {
+                headline.forEachIndexed { index, item ->
+                    Text(
+                        text = if (index == 0) item else "  $item",
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+        }
         lines.forEach { line ->
             Text(
                 text = line,
@@ -66,6 +88,13 @@ fun OsdOverlay(
             )
         }
     }
+}
+
+/** Bits a second, shown the way the reference shows it. */
+private fun rate(bitsPerSecond: Long): String = when {
+    bitsPerSecond >= 8_000_000 -> String.format("%.1f MB/s", bitsPerSecond / 8_000_000.0)
+    bitsPerSecond >= 8_000 -> String.format("%.0f KB/s", bitsPerSecond / 8_000.0)
+    else -> "$bitsPerSecond bps"
 }
 
 private fun bitrate(bits: Int): String = when {

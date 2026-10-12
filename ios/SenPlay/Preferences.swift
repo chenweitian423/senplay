@@ -371,6 +371,8 @@ private struct InterfacePrefs: View {
     @AppStorage(PrefKey.osdPlaySpeed) private var osdPlaySpeed = true
     @AppStorage(PrefKey.osdSystemTime) private var osdSystemTime = true
     @AppStorage(PrefKey.osdOnlyLandscape) private var osdOnlyLandscape = false
+    @AppStorage(PrefKey.osdFps) private var osdFrameRate = true
+    @AppStorage(PrefKey.osdNetworkSpeed) private var osdNetworkSpeed = true
     @AppStorage("pref.play.rememberSpeed") private var rememberSpeed = true
     @AppStorage(PrefKey.showCloudThrottleTip) private var showCloudThrottleTip = true
 
@@ -415,6 +417,8 @@ private struct InterfacePrefs: View {
                 Toggle("显示播放速度", isOn: $osdPlaySpeed)
                 Toggle("显示系统时间", isOn: $osdSystemTime)
                 Toggle("仅横屏显示", isOn: $osdOnlyLandscape)
+                Toggle("显示帧率", isOn: $osdFrameRate)
+                Toggle("显示网速", isOn: $osdNetworkSpeed)
                 Toggle("记住播放倍速", isOn: $rememberSpeed)
                 Toggle("网盘限速提示", isOn: $showCloudThrottleTip)
             }

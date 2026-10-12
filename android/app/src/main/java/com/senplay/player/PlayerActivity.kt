@@ -250,6 +250,9 @@ private const val P_SPEED_BUTTON = "ui.speedButton"
 private const val P_OSD_PLAY_SPEED = "ui.osd.playSpeed"
 private const val P_OSD_SYSTEM_TIME = "ui.osd.systemTime"
 private const val P_OSD_ONLY_LANDSCAPE = "ui.osd.onlyLandscape"
+// The other two counters the reference keeps beside the clock.
+private const val P_OSD_FPS = "ui.osd.fps"
+private const val P_OSD_NETWORK_SPEED = "ui.osd.networkSpeed"
 
 /** Fixed rather than locale-formatted: the overlay is monospaced and a 12-hour clock
  * would make the line change width once a second. */
@@ -409,6 +412,8 @@ fun PlayerScreen(
     val osdPlaySpeed = remember { store.prefBool(P_OSD_PLAY_SPEED, true) }
     val osdSystemTime = remember { store.prefBool(P_OSD_SYSTEM_TIME, true) }
     val osdOnlyLandscape = remember { store.prefBool(P_OSD_ONLY_LANDSCAPE, false) }
+    val osdFrameRate = remember { store.prefBool(P_OSD_FPS, true) }
+    val osdNetworkSpeed = remember { store.prefBool(P_OSD_NETWORK_SPEED, true) }
     val doubleLeft = remember { store.prefString(P_DOUBLE_LEFT, "backward") }
     val doubleCenter = remember { store.prefString(P_DOUBLE_CENTER, "playPause") }
     val doubleRight = remember { store.prefString(P_DOUBLE_RIGHT, "forward") }
@@ -538,7 +543,11 @@ fun PlayerScreen(
                 audioBitrate = PlaybackStats.audioBitrate,
                 dropped = PlaybackStats.droppedFrames,
                 width = PlaybackStats.width,
-                height = PlaybackStats.height
+                height = PlaybackStats.height,
+                // Zeroed rather than hidden here: OsdOverlay drops a counter whose
+                // value is zero, so the preference only has to be consulted once.
+                frameRate = if (osdFrameRate) PlaybackStats.frameRate else 0f,
+                bandwidth = if (osdNetworkSpeed) PlaybackStats.bandwidth else 0L
             )
             // "显示系统时间" and "仅横屏显示" are refreshed on the same tick: this
             // already runs once a second, and a second notification source would only

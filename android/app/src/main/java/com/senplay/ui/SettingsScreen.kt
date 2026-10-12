@@ -225,6 +225,8 @@ private fun SettingsDetail(store: LibraryStore, page: String, onBack: () -> Unit
         PrefSwitch(store, "ui.osd.playSpeed", "显示播放速度", null, true)
         PrefSwitch(store, "ui.osd.systemTime", "显示系统时间", null, true)
         PrefSwitch(store, "ui.osd.onlyLandscape", "仅横屏显示", null, false)
+        PrefSwitch(store, "ui.osd.fps", "显示帧率", null, true)
+        PrefSwitch(store, "ui.osd.networkSpeed", "显示网速", null, true)
         PrefSwitch(store, "ui.showOSD", "显示状态信息", "左上角显示实时码率、帧率与丢帧", false)
         PrefSwitch(store, "play.rememberSpeed", "记住播放倍速", "下次播放沿用上次选择的倍速", true)
         PrefSwitch(store, "ui.showStartTitle", "开始播放提示标题", null, true)

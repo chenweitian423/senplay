@@ -41,6 +41,9 @@ enum PrefKey {
     static let osdPlaySpeed = "pref.ui.osd.playSpeed"
     static let osdSystemTime = "pref.ui.osd.systemTime"
     static let osdOnlyLandscape = "pref.ui.osd.onlyLandscape"
+    /// The other two counters the reference keeps in its overlay, beside the clock.
+    static let osdFps = "pref.ui.osd.fps"
+    static let osdNetworkSpeed = "pref.ui.osd.networkSpeed"
     static let showStartTitle = "pref.ui.showStartTitle"
     static let showSkipTip = "pref.ui.showSkipTip"
     static let showCloudThrottleTip = "pref.ui.showCloudThrottleTip"
@@ -574,8 +577,15 @@ struct PlayerScreen: View {
     @AppStorage(PrefKey.osdPlaySpeed) private var osdPlaySpeed = true
     @AppStorage(PrefKey.osdSystemTime) private var osdSystemTime = true
     @AppStorage(PrefKey.osdOnlyLandscape) private var osdOnlyLandscape = false
+    @AppStorage(PrefKey.osdFps) private var osdFrameRate = true
+    @AppStorage(PrefKey.osdNetworkSpeed) private var osdNetworkSpeed = true
     /// The clock the overlay prints, refreshed by the same timer that polls statistics.
     @State private var osdClockText = ""
+    /// Network rate, from the change in the kernel's byte counter between ticks. The
+    /// reference shows a rate where this used to show a running total.
+    @State private var networkRate: Double = 0
+    @State private var lastBytes: Int64 = 0
+    @State private var lastBytesAt = Date()
     @State private var isLandscape = false
 
     private static let osdClockFormatter: DateFormatter = {
@@ -803,7 +813,19 @@ struct PlayerScreen: View {
                 if stats != nil { stats = nil }
                 return
             }
-            stats = kernel?.statistics()
+            let snapshot = kernel?.statistics()
+            // The reference shows a rate rather than a running total: the change in
+            // bytes over the second since the last tick.
+            if let snapshot {
+                let now = Date()
+                let elapsed = now.timeIntervalSince(lastBytesAt)
+                if elapsed > 0, lastBytes > 0, snapshot.bytesRead >= lastBytes {
+                    networkRate = Double(snapshot.bytesRead - lastBytes) / elapsed
+                }
+                lastBytes = snapshot.bytesRead
+                lastBytesAt = now
+            }
+            stats = snapshot
         }
     }
 
@@ -1232,6 +1254,18 @@ struct PlayerScreen: View {
     /// Live counters, in the corner where they do not fight the controls.
     private func osdOverlay(_ stats: OSDStats) -> some View {
         VStack(alignment: .leading, spacing: 2) {
+            // The reference's three sit on one line: clock, frame rate, network rate.
+            HStack(spacing: 10) {
+                if osdSystemTime, !osdClockText.isEmpty {
+                    Text(osdClockText)
+                }
+                if osdFrameRate, stats.fps > 0 {
+                    Text(String(format: "FPS %.0f", stats.fps))
+                }
+                if osdNetworkSpeed, networkRate > 0 {
+                    Text(networkRate.sizeRateText)
+                }
+            }
             Text("视频 \(Double(stats.videoBitrate).bitrateText)")
             Text("音频 \(Double(stats.audioBitrate).bitrateText)")
             Text(String(format: "帧率 %.1f", stats.fps))
@@ -1869,5 +1903,12 @@ extension Color {
             return
         }
         self = Color(.sRGB, red: red, green: green, blue: blue, opacity: alpha)
+    }
+}
+
+private extension Double {
+    /// Bytes per second, for the overlay's network rate.
+    var sizeRateText: String {
+        ByteCountFormatter.string(fromByteCount: Int64(self), countStyle: .file) + "/s"
     }
 }

@@ -17,6 +17,10 @@ object PlaybackStats {
     @Volatile var droppedFrames: Int = 0
     @Volatile var width: Int = 0
     @Volatile var height: Int = 0
+    /** The overhead shows a frame rate beside the clock; the input format carries it. */
+    @Volatile var frameRate: Float = 0f
+    /** Bits a second as the loader estimates them — the overlay's network rate. */
+    @Volatile var bandwidth: Long = 0
 
     fun reset() {
         videoBitrate = 0
@@ -24,6 +28,8 @@ object PlaybackStats {
         droppedFrames = 0
         width = 0
         height = 0
+        frameRate = 0f
+        bandwidth = 0
     }
 }
 
@@ -35,6 +41,17 @@ fun analyticsListener(): AnalyticsListener = object : AnalyticsListener {
         decoderReuseEvaluation: androidx.media3.exoplayer.DecoderReuseEvaluation?
     ) {
         PlaybackStats.videoBitrate = format.bitrate
+        PlaybackStats.frameRate = format.frameRate ?: 0f
+    }
+
+    override fun onBandwidthEstimate(
+        eventTime: AnalyticsListener.EventTime,
+        totalLoadTimeMs: Int,
+        totalBytesLoaded: Long,
+        bitrateEstimate: Long
+    ) {
+        // Bits per second, the same unit the loader reports.
+        PlaybackStats.bandwidth = bitrateEstimate
     }
 
     override fun onAudioInputFormatChanged(
