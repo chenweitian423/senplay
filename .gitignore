@@ -5,6 +5,7 @@ android/.gradle
 android/local.properties
 ios/build
 ios/build-release
+ios/build-tests
 ios/Payload
 ios/artifacts
 ios/*.xcodeproj

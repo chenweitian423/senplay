@@ -504,7 +504,8 @@ private fun ServerBrowserScreen(
                         subtitleUrl = subtitle,
                         positionMs = entry.positionMs,
                         headers = plex?.mediaHeaders() ?: emptyMap(),
-                        queue = queue
+                        queue = queue,
+                        imageUrl = entry.imageUrl
                     )
                 } else if (server.isEmbyLike) {
                     val client = emby ?: EmbyClient(server)
@@ -514,7 +515,8 @@ private fun ServerBrowserScreen(
                         subtitleUrl = subtitle,
                         positionMs = entry.positionMs,
                         headers = client.mediaHeaders(),
-                        queue = queue
+                        queue = queue,
+                        imageUrl = entry.imageUrl
                     )
                 } else {
                     PlayRequest(
@@ -522,7 +524,8 @@ private fun ServerBrowserScreen(
                         name = entry.name,
                         subtitleUrl = subtitle,
                         positionMs = entry.positionMs,
-                        queue = queue
+                        queue = queue,
+                        imageUrl = entry.imageUrl
                     )
                 }
                 onPlay(request)

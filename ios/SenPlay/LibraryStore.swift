@@ -71,10 +71,15 @@ final class LibraryStore: ObservableObject {
 
     // MARK: - history
 
-    func rememberProgress(url: String, name: String, positionMs: Double, durationMs: Double) {
+    func rememberProgress(url: String, name: String, positionMs: Double, durationMs: Double,
+                          imageURL: String? = nil) {
         guard rememberProgress else { return }
+        // The artwork is sticky: a later visit that arrives carrying none — play resumed
+        // from the history list or the home shelf, say — keeps whatever the browser
+        // recorded rather than blanking the tile it already drew.
+        let kept = imageURL ?? history.first { $0.url == url }?.imageURL
         history.removeAll { $0.url == url }
-        history.insert(HistoryEntry(url: url, name: name, positionMs: positionMs, durationMs: durationMs, updatedAt: Date()), at: 0)
+        history.insert(HistoryEntry(url: url, name: name, positionMs: positionMs, durationMs: durationMs, updatedAt: Date(), imageURL: kept), at: 0)
         history = Array(history.prefix(300))
         defaults.set(LibraryStore.encode(history), forKey: Keys.history)
     }

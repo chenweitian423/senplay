@@ -124,7 +124,9 @@ class PlayerActivity : ComponentActivity() {
         val userAgent: String?,
         val positionMs: Long,
         val queue: List<Pair<String, String>>,
-        val cloudDrive: Boolean
+        val cloudDrive: Boolean,
+        /** Artwork the browser showed, written to the history so the shelf can reuse it. */
+        val imageUrl: String?
     )
 
     private var media by mutableStateOf<Media?>(null)
@@ -156,6 +158,7 @@ class PlayerActivity : ComponentActivity() {
                             sourceUri = intent.data,
                             queue = playing.queue,
                             cloudDrive = playing.cloudDrive,
+                            imageUrl = playing.imageUrl,
                             onFinish = { finish() },
                             onPlayNext = { nextUrl, nextTitle ->
                                 startActivity(
@@ -196,7 +199,8 @@ class PlayerActivity : ComponentActivity() {
             positionMs = intent.getLongExtra(EXTRA_POSITION_MS, 0L),
             queue = intent.getStringArrayListExtra(EXTRA_QUEUE_URLS).orEmpty()
                 .zip(intent.getStringArrayListExtra(EXTRA_QUEUE_NAMES).orEmpty()),
-            cloudDrive = intent.getBooleanExtra(EXTRA_CLOUD_DRIVE, false)
+            cloudDrive = intent.getBooleanExtra(EXTRA_CLOUD_DRIVE, false),
+            imageUrl = intent.getStringExtra(EXTRA_IMAGE_URL)
         )
     }
 
@@ -209,6 +213,7 @@ class PlayerActivity : ComponentActivity() {
         const val EXTRA_QUEUE_URLS = "extra_queue_urls"
         const val EXTRA_QUEUE_NAMES = "extra_queue_names"
         const val EXTRA_CLOUD_DRIVE = "extra_cloud_drive"
+        const val EXTRA_IMAGE_URL = "extra_image_url"
 
         fun intentFor(
             context: Context,
@@ -218,7 +223,8 @@ class PlayerActivity : ComponentActivity() {
             userAgent: String? = null,
             positionMs: Long = 0L,
             queue: List<Pair<String, String>> = emptyList(),
-            cloudDrive: Boolean = false
+            cloudDrive: Boolean = false,
+            imageUrl: String? = null
         ): Intent = Intent(context, PlayerActivity::class.java).apply {
             putExtra(EXTRA_URL, url)
             putExtra(EXTRA_NAME, name)
@@ -230,6 +236,7 @@ class PlayerActivity : ComponentActivity() {
                 putStringArrayListExtra(EXTRA_QUEUE_URLS, ArrayList(queue.map { it.first }))
                 putStringArrayListExtra(EXTRA_QUEUE_NAMES, ArrayList(queue.map { it.second }))
             }
+            imageUrl?.let { putExtra(EXTRA_IMAGE_URL, it) }
         }
     }
 }
@@ -371,6 +378,8 @@ fun PlayerScreen(
     sourceUri: Uri?,
     queue: List<Pair<String, String>>,
     cloudDrive: Boolean = false,
+    /** Artwork for the history row this playback writes, when the caller knew an address. */
+    imageUrl: String? = null,
     onFinish: () -> Unit,
     onPlayNext: (String, String) -> Unit = { _, _ -> }
 ) {
@@ -773,7 +782,7 @@ fun PlayerScreen(
         upNext = null
         countdown = 0
         store.rememberProgress(url, name, player.currentPosition ?: 0L,
-            (player.duration ?: 0L).coerceAtLeast(0L))
+            (player.duration ?: 0L).coerceAtLeast(0L), imageUrl)
         player.stop()
         onPlayNext(next.first, next.second)
     }
@@ -853,7 +862,7 @@ fun PlayerScreen(
             delay(5000)
             val d = player.duration
             if (d > 0 && store.rememberProgressEnabled) {
-                store.rememberProgress(url, name, player.currentPosition, d)
+                store.rememberProgress(url, name, player.currentPosition, d, imageUrl)
             }
         }
     }
@@ -887,7 +896,7 @@ fun PlayerScreen(
     DisposableEffect(player) {
         onDispose {
             if (store.rememberProgressEnabled && player.duration > 0) {
-                store.rememberProgress(url, name, player.currentPosition, player.duration)
+                store.rememberProgress(url, name, player.currentPosition, player.duration, imageUrl)
             }
             SchemeRouter.dispatchCallback(context, sourceUri ?: Uri.EMPTY, url, player.currentPosition / 1000)
             player.release()

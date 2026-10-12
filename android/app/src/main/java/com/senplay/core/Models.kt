@@ -81,7 +81,13 @@ data class HistoryEntry(
     val name: String,
     val positionMs: Long,
     val durationMs: Long,
-    val updatedAt: Long
+    val updatedAt: Long,
+    /**
+     * Artwork, when whatever started the playback knew an address for it. The home
+     * shelf draws this; a bare URL carries nothing a still could be pulled from,
+     * which is why every remote entry used to land on the same grey tile.
+     */
+    val imageUrl: String? = null
 ) {
     val progress: Float
         get() = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
@@ -101,5 +107,7 @@ data class PlayRequest(
      * "网盘限速提示". A presigned object-storage URL says nothing about where it came
      * from, so the source has to travel with the request.
      */
-    val isCloudDrive: Boolean = false
+    val isCloudDrive: Boolean = false,
+    /** Artwork address, so the resume shelf keeps the poster the browser showed. */
+    val imageUrl: String? = null
 )

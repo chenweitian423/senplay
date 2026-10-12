@@ -1932,7 +1932,8 @@ struct PlayerScreen: View {
         let total = kernel.totalTime
         if seconds.isFinite, total.isFinite, total > 0 {
             LibraryStore.shared.rememberProgress(url: request.url, name: request.name,
-                                                 positionMs: seconds * 1000, durationMs: total * 1000)
+                                                 positionMs: seconds * 1000, durationMs: total * 1000,
+                                                 imageURL: request.imageURL)
         }
         kernel.shutdown()
         self.kernel = nil

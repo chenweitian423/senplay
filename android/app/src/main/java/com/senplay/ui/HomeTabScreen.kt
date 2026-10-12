@@ -35,6 +35,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.senplay.core.HistoryEntry
 import com.senplay.core.LibraryStore
 import com.senplay.core.PlayRequest
@@ -78,7 +79,8 @@ fun HomeTabScreen(
                             PlayRequest(
                                 url = entry.url,
                                 name = entry.name,
-                                positionMs = entry.positionMs
+                                positionMs = entry.positionMs,
+                                imageUrl = entry.imageUrl
                             )
                         )
                     }
@@ -131,10 +133,17 @@ private fun Shelf(title: String, content: androidx.compose.foundation.lazy.LazyL
 @Composable
 private fun ResumeCard(entry: HistoryEntry, onClick: () -> Unit) {
     val context = LocalContext.current
-    // A frame from the file when it is one we can read; otherwise the tile stands in.
-    val frame by produceState<android.graphics.Bitmap?>(initialValue = null, entry.url) {
-        value = withContext(Dispatchers.IO) {
-            runCatching { Thumbnails.frame(context, entry.url, 10) }.getOrNull()
+    // The poster the browser showed when the entry carries one; a frame from the file
+    // when it is one we can read; otherwise the tile stands in. Reading a frame off a
+    // remote URL is not something this can do, which is why the artwork is recorded at
+    // play time instead.
+    val frame by produceState<android.graphics.Bitmap?>(initialValue = null, entry.url, entry.imageUrl) {
+        value = if (entry.imageUrl != null) {
+            null
+        } else {
+            withContext(Dispatchers.IO) {
+                runCatching { Thumbnails.frame(context, entry.url, 10) }.getOrNull()
+            }
         }
     }
 
@@ -151,8 +160,16 @@ private fun ResumeCard(entry: HistoryEntry, onClick: () -> Unit) {
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
+            val artwork = entry.imageUrl
             val bitmap = frame
-            if (bitmap != null) {
+            if (artwork != null) {
+                AsyncImage(
+                    model = artwork,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxWidth().height(90.dp)
+                )
+            } else if (bitmap != null) {
                 Image(
                     bitmap = bitmap.asImageBitmap(),
                     contentDescription = null,

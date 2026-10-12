@@ -55,41 +55,32 @@ class LibraryStore private constructor(context: Context) {
     fun history(): List<HistoryEntry> = readArray(KEY_HISTORY).mapNotNull { o ->
         val url = o.optString("url")
         if (url.isBlank()) null
-        else HistoryEntry(url, o.optString("name", url), o.optLong("position"), o.optLong("duration"), o.optLong("updatedAt"))
+        else HistoryEntry(
+            url,
+            o.optString("name", url),
+            o.optLong("position"),
+            o.optLong("duration"),
+            o.optLong("updatedAt"),
+            o.optString("imageUrl").ifBlank { null }
+        )
     }.sortedByDescending { it.updatedAt }
 
-    fun rememberProgress(url: String, name: String, positionMs: Long, durationMs: Long) {
-        val entry = HistoryEntry(url, name, positionMs, durationMs, System.currentTimeMillis())
-        val all = history().filterNot { it.url == url } + entry
-        writeArray(
-            KEY_HISTORY,
-            all.sortedByDescending { it.updatedAt }.take(300).map { h ->
-                JSONObject().apply {
-                    put("url", h.url)
-                    put("name", h.name)
-                    put("position", h.positionMs)
-                    put("duration", h.durationMs)
-                    put("updatedAt", h.updatedAt)
-                }
-            }
-        )
+    fun rememberProgress(url: String, name: String, positionMs: Long, durationMs: Long,
+                         imageUrl: String? = null) {
+        // The artwork is sticky: a later visit that arrives carrying none — play resumed
+        // from the history list, say — keeps what the browser recorded rather than
+        // blanking the tile the shelf already drew.
+        val previous = history()
+        val kept = imageUrl ?: previous.firstOrNull { it.url == url }?.imageUrl
+        val entry = HistoryEntry(url, name, positionMs, durationMs, System.currentTimeMillis(), kept)
+        val all = previous.filterNot { it.url == url } + entry
+        writeArray(KEY_HISTORY, all.sortedByDescending { it.updatedAt }.take(300).map { it.toJson() })
     }
 
     fun savedPosition(url: String): Long = history().firstOrNull { it.url == url }?.positionMs ?: 0L
 
     fun removeHistory(url: String) {
-        writeArray(
-            KEY_HISTORY,
-            history().filterNot { it.url == url }.map { h ->
-                JSONObject().apply {
-                    put("url", h.url)
-                    put("name", h.name)
-                    put("position", h.positionMs)
-                    put("duration", h.durationMs)
-                    put("updatedAt", h.updatedAt)
-                }
-            }
-        )
+        writeArray(KEY_HISTORY, history().filterNot { it.url == url }.map { it.toJson() })
     }
 
     fun clearHistory() {
@@ -211,4 +202,18 @@ class LibraryStore private constructor(context: Context) {
                 instance ?: LibraryStore(context).also { instance = it }
             }
     }
+}
+
+/**
+ * One history row as it is stored. Shared by every writer so that deleting an
+ * unrelated entry cannot quietly drop a field the others keep — which is exactly what
+ * would happen to the artwork if each site kept building its own JSONObject.
+ */
+private fun HistoryEntry.toJson(): JSONObject = JSONObject().apply {
+    put("url", url)
+    put("name", name)
+    put("position", positionMs)
+    put("duration", durationMs)
+    put("updatedAt", updatedAt)
+    imageUrl?.let { put("imageUrl", it) }
 }

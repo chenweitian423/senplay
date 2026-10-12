@@ -129,6 +129,10 @@ struct HistoryEntry: Codable, Hashable, Identifiable {
     var positionMs: Double
     var durationMs: Double
     var updatedAt: Date
+    /// Artwork, when whatever started the playback knew an address for it. The home
+    /// shelf draws this; a bare URL carries nothing a still can be pulled from, which
+    /// is why every remote entry used to land on the same grey tile.
+    var imageURL: String? = nil
     var id: String { url }
 
     var progress: Double {
@@ -158,4 +162,7 @@ struct PlayRequest: Equatable {
     /// travel with the request — the URL itself is a signed link with nothing left
     /// in it that says where it came from.
     var isCloudDrive: Bool = false
+    /// Artwork address, carried so the resume shelf and the history list can keep
+    /// showing the poster the browser showed after the item has been played.
+    var imageURL: String? = nil
 }

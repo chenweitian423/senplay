@@ -78,7 +78,8 @@ struct HomeTabView: View {
 
     private func resumeCard(_ entry: HistoryEntry) -> some View {
         Button {
-            pending = PlayRequest(url: entry.url, name: entry.name, positionMs: entry.positionMs)
+            pending = PlayRequest(url: entry.url, name: entry.name, positionMs: entry.positionMs,
+                                  imageURL: entry.imageURL)
         } label: {
             VStack(alignment: .leading, spacing: 6) {
                 ZStack(alignment: .bottomLeading) {
@@ -104,18 +105,31 @@ struct HomeTabView: View {
         .buttonStyle(.plain)
     }
 
-    /// A still for a file we can read locally, and a neutral tile otherwise. Remote
-    /// entries name a URL, not a resource this app can pull a frame from without
-    /// opening the connection first.
+    /// The still the browser showed, when the entry carries one; a frame from the file
+    /// for something local; the neutral tile only when there is neither. Remote entries
+    /// are not a dead end any more — the artwork travels with the play request now, so
+    /// the shelf can draw the same poster the library did.
     @ViewBuilder
     private func poster(for entry: HistoryEntry) -> some View {
-        if let url = URL(string: entry.url), url.isFileURL {
+        if let address = entry.imageURL, let url = URL(string: address) {
+            AsyncImage(url: url) { phase in
+                if let image = phase.image {
+                    image.resizable().aspectRatio(contentMode: .fill)
+                } else {
+                    posterPlaceholder()
+                }
+            }
+        } else if let url = URL(string: entry.url), url.isFileURL {
             LocalThumbnail(file: url, percent: previewPercent)
         } else {
-            Rectangle()
-                .fill(Color.secondary.opacity(0.22))
-                .overlay(Image(systemName: "film").foregroundColor(.secondary))
+            posterPlaceholder()
         }
+    }
+
+    private func posterPlaceholder() -> some View {
+        Rectangle()
+            .fill(Color.secondary.opacity(0.22))
+            .overlay(Image(systemName: "film").foregroundColor(.secondary))
     }
 
     private func serverTile(_ server: ServerConfig) -> some View {
