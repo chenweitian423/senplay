@@ -9,10 +9,27 @@ struct SenPlayApp: App {
 
     init() {
         #if DEBUG
-        // A URL handed in through the environment, so a playback path can be driven
-        // from the command line — the simulator has no window to tap on here. Debug
-        // builds only: nothing in a release build reads this.
-        if let raw = ProcessInfo.processInfo.environment["SENPLAY_AUTOPLAY"],
+        // Two hooks for driving a build from the command line, both DEBUG-only —
+        // nothing in a release build reads either.
+        //
+        // SENPLAY_AUTOPLAY=<url> opens the player on that URL at launch.
+        // SENPLAY_SEED=<name>|<poster>|<durationMs>[;…] writes history rows, so the
+        // home tab's carousel has something to draw without tapping through a server.
+        let environment = ProcessInfo.processInfo.environment
+        if let seed = environment["SENPLAY_SEED"] {
+            for row in seed.split(separator: ";") {
+                let parts = row.split(separator: "|", omittingEmptySubsequences: false)
+                guard parts.count >= 3 else { continue }
+                LibraryStore.shared.rememberProgress(
+                    url: "seed://" + parts[0],
+                    name: String(parts[0]),
+                    positionMs: 0,
+                    durationMs: Double(parts[2]) ?? 0,
+                    imageURL: String(parts[1])
+                )
+            }
+        }
+        if let raw = environment["SENPLAY_AUTOPLAY"],
            let url = URL(string: raw) {
             _pending = State(initialValue: PlayRequest(url: raw, name: url.lastPathComponent))
         }

@@ -8,12 +8,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dns
@@ -30,6 +34,8 @@ import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -69,6 +75,23 @@ fun HomeTabScreen(
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(16.dp)
             )
+        }
+
+        // The reference's opening block. Only entries the history has artwork for take
+        // part: a carousel of grey tiles would be worse than no carousel.
+        val carousel = history.filter { it.imageUrl != null }.take(6)
+        if (carousel.isNotEmpty()) {
+            Carousel(carousel) { entry ->
+                onPlay(
+                    PlayRequest(
+                        url = entry.url,
+                        name = entry.name,
+                        positionMs = entry.positionMs,
+                        imageUrl = entry.imageUrl,
+                        durationMs = entry.durationMs
+                    )
+                )
+            }
         }
 
         if (history.isNotEmpty()) {
@@ -111,6 +134,72 @@ fun HomeTabScreen(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * The reference's opening block: one poster at a time, the title over a scrim, page
+ * dots underneath, and a tap resumes that film.
+ */
+@Composable
+private fun Carousel(entries: List<HistoryEntry>, onPlay: (HistoryEntry) -> Unit) {
+    val state = rememberPagerState(pageCount = { entries.size })
+    Box(modifier = Modifier.fillMaxWidth()) {
+        HorizontalPager(
+            state = state,
+            modifier = Modifier.fillMaxWidth().height(230.dp)
+        ) { page ->
+            val entry = entries[page]
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable { onPlay(entry) }
+            ) {
+                AsyncImage(
+                    model = entry.imageUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))
+                            )
+                        )
+                ) {
+                    Text(
+                        entry.name,
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+            }
+        }
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            repeat(entries.size) { index ->
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .background(
+                            if (index == state.currentPage) Color.White
+                            else Color.White.copy(alpha = 0.4f),
+                            RoundedCornerShape(50)
+                        )
+                )
             }
         }
     }

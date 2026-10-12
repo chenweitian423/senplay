@@ -2,10 +2,9 @@ import SwiftUI
 
 /// The landing tab: what you were watching and the servers behind it.
 ///
-/// The reference leads with a poster carousel. A frame from the file itself is what
-/// this tree can produce — there is no artwork catalogue behind it — so the top shelf
-/// is the resume row and it carries the same thing the carousel does: what to play
-/// next, already positioned.
+/// The reference leads with a full-width poster carousel, then the resume row, then
+/// the servers. The carousel here draws the entries the history already carries
+/// artwork for — no extra request, and nothing shown that cannot be played.
 struct HomeTabView: View {
     @ObservedObject var store: LibraryStore
     @Binding var pending: PlayRequest?
@@ -22,6 +21,10 @@ struct HomeTabView: View {
                             .foregroundColor(.secondary)
                             .padding(.horizontal, 16)
                             .padding(.top, 24)
+                    }
+
+                    if !carouselItems.isEmpty {
+                        carousel
                     }
 
                     if !store.history.isEmpty {
@@ -58,6 +61,55 @@ struct HomeTabView: View {
             .navigationTitle("首页")
         }
         .navigationViewStyle(.stack)
+    }
+
+    /// The entries the history has artwork for. A carousel of grey tiles would be
+    /// worse than no carousel, so an entry without a poster does not make the cut.
+    private var carouselItems: [HistoryEntry] {
+        Array(store.history.filter { $0.imageURL != nil }.prefix(6))
+    }
+
+    /// The reference's opening block: one poster at a time with the title over a
+    /// scrim, page dots underneath, and a tap resumes that film.
+    private var carousel: some View {
+        TabView {
+            ForEach(carouselItems) { entry in
+                Button {
+                    pending = PlayRequest(url: entry.url, name: entry.name,
+                                          positionMs: entry.positionMs,
+                                          imageURL: entry.imageURL,
+                                          durationMs: entry.durationMs)
+                } label: {
+                    // Overlays rather than a ZStack: a fill-mode image inside a ZStack
+                    // sizes the stack to the picture, which leaves the title outside the
+                    // frame that gets clipped. An overlay measures against the frame.
+                    AsyncImage(url: entry.imageURL.flatMap(URL.init(string:))) { phase in
+                        if let image = phase.image {
+                            image.resizable().aspectRatio(contentMode: .fill)
+                        } else {
+                            Color.secondary.opacity(0.2)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 230)
+                    .clipped()
+                    .overlay(alignment: .bottom) {
+                        LinearGradient(colors: [.clear, .black.opacity(0.75)],
+                                       startPoint: .center, endPoint: .bottom)
+                    }
+                    .overlay(alignment: .bottomLeading) {
+                        Text(entry.name)
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .lineLimit(2)
+                            .padding(16)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .tabViewStyle(.page(indexDisplayMode: .always))
+        .frame(height: 230)
     }
 
     @ViewBuilder
