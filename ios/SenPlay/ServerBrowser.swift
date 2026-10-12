@@ -33,6 +33,10 @@ private struct ListDisplay {
     /// "显示演职人员"
     var showCast = true
     var rounded = true
+    /// "显示媒体预览图" — the still on the row, when the source offers one.
+    var showPreview = true
+    /// "缩略图铺满" — crop the still to fill its frame instead of letterboxing it.
+    var fillThumbnail = true
     /// "中间" / "左边" / "右边" — this is a choice, not a switch.
     var ellipsisMode = "middle"
     var fullNameOnMenu = false
@@ -67,6 +71,8 @@ private struct ListDisplay {
         showHDRTag = defaults.object(forKey: "pref.list.showHDRTag") as? Bool ?? true
         showFrameRate = defaults.object(forKey: "pref.list.showFrameRate") as? Bool ?? true
         rounded = defaults.object(forKey: "pref.list.rounded") as? Bool ?? true
+        showPreview = defaults.object(forKey: "pref.list.showPreview") as? Bool ?? true
+        fillThumbnail = defaults.object(forKey: "pref.list.fillThumbnail") as? Bool ?? true
         ellipsisMode = defaults.string(forKey: "pref.list.ellipsis") ?? "middle"
         fullNameOnMenu = defaults.object(forKey: "pref.list.fullNameOnMenu") as? Bool ?? false
         showPlayedMark = defaults.object(forKey: "pref.library.showPlayedMark") as? Bool ?? true
@@ -477,9 +483,14 @@ struct ServerBrowserView: View {
             open(entry)
         } label: {
             HStack(spacing: 12) {
-                if let imageURL = entry.imageURL, let url = URL(string: imageURL) {
+                if display.showPreview, let imageURL = entry.imageURL, let url = URL(string: imageURL) {
                     AsyncImage(url: url) { image in
-                        image.resizable().aspectRatio(contentMode: .fill)
+                        // "缩略图铺满" crops the still to fill its frame; switched off
+                        // it letterboxes the whole frame instead. These stills come
+                        // from the server, which is why "视频预览图时间" — the frame the
+                        // app itself would capture — has nothing to do here.
+                        image.resizable()
+                            .aspectRatio(contentMode: display.fillThumbnail ? .fill : .fit)
                     } placeholder: {
                         placeholderIcon(entry)
                     }

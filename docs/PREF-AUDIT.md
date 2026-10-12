@@ -15,9 +15,9 @@
 
 ## 当前状态
 
-keys with a real read on iOS:     89
-keys with a real read on Android: 79
---- declared, shown in settings, read by nothing else (20) ---
+keys with a real read on iOS:     93
+keys with a real read on Android: 83
+--- declared, shown in settings, read by nothing else (18) ---
 
 ## 未生效的键
 
@@ -234,14 +234,23 @@ scheme，`PlaybackService` 用的是它。
 
 做这一批时发现上一轮的四类分得还不够细，有两类被混进了「没接线」：
 
-**不是「没接线」，是功能本身不存在**——`list.fillThumbnail` / `showPreview` /
-`previewPosition`。这三个键描述的是同一件事：列表里每个视频项的缩略图、它取哪一帧
-（`previewTimePosition`，0 表示不生成）、以及它是铺满还是留边（`thumbnailCropDisplay`）。
-可是 `grep -rn thumbnail` 在两个平台的源码里**只命中设置页那一行**，两端都没有任何
-缩略图实现。接这三个键的前提是先做出一条预览图链路，而参考实现那条链路的规模从同族
-文案就能看出来：`automaticallyGeneratePreview`、`updatePreviewImage`、
-`numberOfConcurrentThreadsInPreviewImage`、`prioritizeEmbeddedThumbnail`
-（"开启后将优先使用文件自身内嵌的封面，预览图时间设定则不起作用"）。
+**这一条我下错了结论，round 42 更正**。当时写的是「`grep -rn thumbnail` 只命中设置页
+那一行，两端都没有任何缩略图实现」——搜索没错，结论错了：缩略图在源码里不叫 thumbnail。
+iOS 的列表行一直有它（`ServerBrowser.swift` 里 `rowCell` 的 `AsyncImage`，46×66，图来自
+服务器的 `/Items/{id}/Images/Primary`），`list.rounded` 那行说的"圆角风格"指的就是它的
+圆角。又是同一个形状的错：**搜一个词没中，就当成了没有**——和把 `grep cast` 只匹配到
+"演职人员"就判定 iOS 不能投屏，是同一件事。
+
+所以 `list.fillThumbnail`（铺满还是留边）和 `list.showPreview`（显不显示）**确实是
+接线**，已经接上：iOS 的列表行按这两个开关决定裁切方式与显示，Android 的列表行此前只
+画一个文件类型图标，现在同样显示缩略图——这是 Android 侧顺手补上的一个能力缺口。
+
+只有 `list.previewPosition` 还悬着，而且它悬的理由和上面两个不同：它管的是**客户端自己
+抽帧**的位置（`previewTimePosition`，"0代表不自动生成缩略图"）。同族文案
+（`automaticallyGeneratePreview`、`updatePreviewImage`、`numberOfConcurrentThreadsInPreviewImage`、
+`prioritizeEmbeddedThumbnail` 的说明"开启后将优先使用文件自身内嵌的封面，预览图时间设定
+则不起作用"）拼出来的是另一条链路：服务器不给图时自己解码取帧。本仓两端都没有这条链路，
+键先留着。
 
 **不是「没接线」，是无落点**：
 
@@ -335,4 +344,36 @@ dead = [k for k in all_keys if not ios.get(k) and not android.get(k)]
 
 **这张表改变了一件事**：此前「双端键串对齐、默认值零处不一致」这句话是对的，但它
 只保证了**设置页长得一样**。有没有真的生效，是另一条轴——而这条轴上两端并不齐。
+
+## 单端对齐的第一批（round 42）
+
+接上六个，死键 20 → 18，单端 20 → 16：
+
+| 键 | 落点 |
+|---|---|
+| `list.fillThumbnail` | iOS 列表行 `AsyncImage` 的 contentMode（铺满 vs 留边）；Android 同步接上 |
+| `list.showPreview` | 同上，决定显不显示 |
+| `list.rounded`（Android） | 列表行缩略图的圆角，对齐 iOS 的 `RoundedRectangle(cornerRadius: display.rounded ? 5 : 0)` |
+| `ui.showStartTitle`（iOS） | 开始播放的提示，文案与优先级都照 Android 的 `hud = when { … }` |
+| `ui.showSkipTip`（iOS） | 片头/片尾跳过的提示，文案照 Android：「已跳过片头 N 秒」/「已到片尾」 |
+| `play.accurateSeek`（Android） | `ExoPlayer.setSeekParameters(EXACT)` |
+
+两个只有编译器才会说的事：`setSeekParameters` 返回 player 以便链式调用，因此 Kotlin 把
+它当方法而不是属性，写成 `player.seekParameters = …` 会报 `'val' cannot be reassigned`；
+Android 的列表行此前根本不画缩略图，只有文件类型图标。
+
+**剩下 16 个单端键分三类**：
+
+- **平台差异（不打算对齐）**：`video.decodeThreads`（Media3 没有软解线程数）；
+  `video.hardwareDecode` / `hdrMetadata` / `upscaling`（Media3 不能禁用 MediaCodec，
+  也没有 HDR 元数据与超分的接口，iOS 侧走 KSPlayer 的 `hardwareDecode` /
+  `destinationDynamicRange` / `videoFilters`）；`gesture.longPressLeftSpeed` /
+  `longPressRightSpeed`（需要按键重复事件）。
+- **功能缺口**：`gesture.longPressSpeed`、`gesture.rememberZoomSize`（Android 既没有
+  长按倍速也没有捏合缩放）；`ui.switchMediaButton`（Android 控制栏没有这个按钮）；
+  `subtitle.scale` / `subtitle.mask`（Android 的嵌挂字幕由 Media3 的 SubtitleView
+  渲染，还没接管它的样式）；`audio.rememberTrack` / `subtitle.rememberTrack`（两端
+  「记住所选轨道」都还没把选择写回存储）。
+- **待查**：`iptv.sources` / `iptv.channels`（Android 有这两个键，iOS 的 IPTV 入口
+  是否另有存储，要单独看）。
 

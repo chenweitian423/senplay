@@ -636,10 +636,29 @@ private fun ServerBrowserScreen(
                             }
                         },
                         leadingContent = {
-                            Icon(
-                                if (entry.isDirectory) Icons.Filled.Folder else Icons.Filled.InsertDriveFile,
-                                contentDescription = null
-                            )
+                            val still = entry.imageUrl
+                            // "显示媒体预览图": the reference app draws the artwork on
+                            // the row instead of a file-type icon, and "缩略图铺满" and
+                            // "圆角风格" are both about the frame it is drawn into.
+                            if (display.showPreview && !still.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = still,
+                                    contentDescription = null,
+                                    contentScale = if (display.fillThumbnail) ContentScale.Crop
+                                    else ContentScale.Fit,
+                                    modifier = Modifier
+                                        .size(width = 46.dp, height = 66.dp)
+                                        .clip(
+                                            RoundedCornerShape(if (display.rounded) 5.dp else 0.dp)
+                                        )
+                                )
+                            } else {
+                                Icon(
+                                    if (entry.isDirectory) Icons.Filled.Folder
+                                    else Icons.Filled.InsertDriveFile,
+                                    contentDescription = null
+                                )
+                            }
                         },
                         modifier = Modifier.clickable { open(entry) }
                     )
@@ -728,6 +747,12 @@ private class ListDisplay(store: LibraryStore) {
     val showCast = store.prefBool("library.showCast", true)
     /** "中间" / "左边" / "右边" — a choice, not a switch. */
     val ellipsisMode = store.prefString("list.ellipsis", "middle")
+    /** "圆角风格" — the corner on the row's still. */
+    val rounded = store.prefBool("list.rounded", true)
+    /** "显示媒体预览图" — the still itself, when the source offers one. */
+    val showPreview = store.prefBool("list.showPreview", true)
+    /** "缩略图铺满" — crop the still to fill its frame instead of letterboxing it. */
+    val fillThumbnail = store.prefBool("list.fillThumbnail", true)
 
     // Poster marks: what the reference app puts on the artwork rather than in the
     // list row.

@@ -557,6 +557,8 @@ struct PlayerScreen: View {
     @AppStorage(PrefKey.screenshotFormat) private var screenshotFormat = "jpg"
     @AppStorage(PrefKey.switchBlackout) private var switchBlackout = true
     @AppStorage(PrefKey.showCloudThrottleTip) private var showCloudThrottleTip = true
+    @AppStorage(PrefKey.showStartTitle) private var showStartTitle = true
+    @AppStorage(PrefKey.showSkipTip) private var showSkipTip = true
     @AppStorage("pref.video.decodeThreads") private var decodeThreads = 8
     @AppStorage("pref.gesture.longPressLeftSpeed") private var longPressLeftSpeed = 0.5
     @AppStorage("pref.gesture.longPressRightSpeed") private var longPressRightSpeed = 2.0
@@ -1285,15 +1287,17 @@ struct PlayerScreen: View {
         if skipIntroSeconds > 0, !didSkipIntro, current > 1.0, current < Double(skipIntroSeconds) {
             didSkipIntro = true
             kernel?.seek(to: Double(skipIntroSeconds))
-            toast = "已跳过片头 \(skipIntroSeconds) 秒"
-            scheduleToastClear()
+            if showSkipTip {
+                toast = "已跳过片头 \(skipIntroSeconds) 秒"
+                scheduleToastClear()
+            }
         }
         if skipOutroSeconds > 0, !didSkipOutro, total > 0,
            total - current <= Double(skipOutroSeconds) {
             didSkipOutro = true
             if autoNext {
                 beginCountdown()
-            } else {
+            } else if showSkipTip {
                 toast = "已到片尾"
                 scheduleToastClear()
             }
@@ -1583,10 +1587,13 @@ struct PlayerScreen: View {
         scheduleHide()
         updateIdleTimer()
 
-        // "网盘限速提示" — object storage is rate limited per account, so a stutter
-        // here is expected rather than a fault in the file.
+        // "开始播放提示标题" and "网盘限速提示" share the one line, so what the file is
+        // served from wins over the title — the same order the Android side uses.
         if showCloudThrottleTip, request.isCloudDrive {
             toast = "网盘限速，播放可能不流畅"
+            scheduleToastClear()
+        } else if showStartTitle {
+            toast = request.name
             scheduleToastClear()
         }
     }

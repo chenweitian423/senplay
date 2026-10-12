@@ -96,6 +96,17 @@ class PlaybackService : MediaSessionService() {
         player.addAnalyticsListener(analyticsListener())
         PlaybackStats.reset()
 
+        // "精准定位进度": Media3 seeks to the nearest keyframe by default, which is the
+        // fast-but-approximate behaviour the settings row contrasts against. The
+        // preference lives here rather than in the activity because
+        // setSeekParameters is an ExoPlayer method, not part of the Player interface
+        // the activity holds through its controller.
+        if (store.prefBool("play.accurateSeek", false)) {
+            // Not `player.seekParameters = …`: ExoPlayer's setter returns the player for
+            // chaining, so Kotlin exposes it as a method rather than a property.
+            player.setSeekParameters(androidx.media3.exoplayer.SeekParameters.EXACT)
+        }
+
         // The gain stage needs the player's audio session, so it is attached here
         // rather than in the activity.
         if (store.prefBool("audio.enhance", true)) {
