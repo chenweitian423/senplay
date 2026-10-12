@@ -124,3 +124,29 @@ Android 的 `DetailScreen.kt` 同样：`AsyncImage` 海报、`overview`（125 �
 
 这是第四次「先判定该做、查完发现已有」。连同第九节那五条，共同点始终是同一个：
 **从参照实现的截图倒推我们缺什么，而不是先读自己的代码。**
+
+## 十一、深色模式也不缺（第五次同款误判）
+
+第七节列的「深色模式」查完不成立。
+
+两端「硬编码颜色」的分布看着不小（iOS 26 处、Android 73 处），但按位置逐个读一遍，
+没有一处属于深色模式问题：
+
+- **播放器叠层**（iOS `PlayerScreen` 18 处；Android `PlayerActivity` 35 处、
+  `OsdOverlay` 3 处、`DanmakuOverlay` 2 处）：全部画在视频画面上，必须是白字黑底。
+  这里跟随系统主题反而是错的。
+- **iOS `Views.swift` 34–40 行的 7 处**：是「主题颜色」这个设置的七个色板值，是用户
+  自己选的强调色，不是背景色。
+- **iOS `ServerBrowser.swift` 1 处**：缩略图上的播放按钮底衬，同样画在图片上。
+- **Android `Theme.kt` 19 处**：就是主题定义本身。注意它的
+  `background = 0xFF0E1114` —— **Android 端的主题本来就是深色的**。
+- **Android `ServersScreen` 14 处**：协议品牌色，有意为之。
+
+iOS 其余地方用的是语义色（`Color.secondary`、`Color(.secondarySystemGroupedBackground)`），
+本来就跟着系统走。
+
+所以两端都不缺「深色模式」。真正缺的是另一件事：**参考的设置里有「外观主题」
+（浅色 / 深色 / 跟随系统）这一项，我们没有** —— 现在是 Android 固定深色、
+iOS 固定跟随系统。那是一个设置项，不是一个主题工程。
+
+这是第五次「先判定该做、查完发现已有」。前四次分别见第十节和第九节。
