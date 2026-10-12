@@ -50,6 +50,7 @@ fun SettingsScreen(store: LibraryStore) {
             listOf("files" to "文件", "servers" to "服务器", "iptv" to "IPTV", "record" to "记录"),
             "files"
         )
+        PrefSwitch(store, "ui.showRecordModule", "显示记录模块", null, true)
         PrefChoice(
             store, "general.themeColor", "主题颜色",
             listOf(

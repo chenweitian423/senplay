@@ -546,3 +546,23 @@ Media3 的 SubtitleView 都从字幕文件取样式，没有「覆盖文件样�
 `kVideoFrameInterpolationEnabled` / `kVideoUpscalingLevel` / `kSDRToHDREnabled`，
 以及 `kAudioEnhancePercent`（Android 有 `LoudnessEnhancer.setTargetGain`）。
 做之前先确认两端内核各自的可用接口，再决定是否落得下去。
+
+### 第三档的判定（round 46 续）
+
+| 键 | 证据 |
+|---|---|
+| `kAudioEnhancePercent` | **已接**。iOS 原来写死 `volume=2.0`，Android 的 `GainStage` 写死 `setTargetGain(600)`；两端现在都读设置，Android 按 `20·log10(比值)·100` 换算，200% 仍是原来那 +6 dB |
+| `kEnableDolbyP7FEL` / `kEnableDolbyP7ToP81` | KSPlayer 里 `isDovi` 只出现一次，而且是硬编码的 `false`——没有 FEL 处理路径；iOS 上的 Profile 转换属于系统而不是应用 |
+| `kEnableDolbyAtmos` | KSPlayer 通过 `setSupportsMultichannelContent` 跟随系统的空间音频开关，本身不提供应用级开关 |
+| `kVideoFrameInterpolationEnabled` / `kVideoUpscalingLevel` / `kSDRToHDREnabled` | iOS 三条都能通过 FFmpeg 的 `videoFilters` 实现（现有的超分开关就是这么做的），但 Media3 没有对应接口——单端不做 |
+| `kDisplaySearchBox` | iOS 用的是系统 `.searchable`，修饰符无法条件移除；Android 的搜索框可以——同样是单端不做 |
+
+### 两次判断错误，记在这里
+
+1. **`audio.enhance` 被误判成「读取但从未使用」**。我只在 `PlayerActivity.kt` 里 grep，
+   而增益阶段在 `PlaybackService.kt` 里，一直都在。这与早先「grep 不到 cast 就断言
+   iOS 不能投屏」是同一个错误。
+2. **`LoudnessEnhancer` 一开始被放进了 Activity**，而 Activity 只有 `MediaController`，
+   它没有 `audioSessionId`——那个属性属于 `ExoPlayer`，也就是服务里那个真正的播放器。
+
+两条都指向同一件事：**在这两个平台上，「谁持有播放器」决定了哪一层能改音频**。

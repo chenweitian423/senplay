@@ -47,6 +47,7 @@ struct PreferencesView: View {
 private struct GeneralPrefs: View {
     @AppStorage("pref.general.iCloudSync") private var iCloudSync = true
     @AppStorage("pref.general.defaultModule") private var defaultModule = "files"
+    @AppStorage("pref.ui.showRecordModule") private var showRecordModule = true
     @AppStorage("pref.general.themeColor") private var themeColor = "blue"
 
     private let modules = ["files", "servers", "iptv", "record"]
@@ -99,6 +100,7 @@ private struct GeneralPrefs: View {
                     Text("记录").tag("record")
                 }
                 .pickerStyle(.menu)
+                Toggle("显示记录模块", isOn: $showRecordModule)
             }
             Section("URL Schemes") {
                 Text("senplay://x-callback-url/play · download · importserver · importicon")

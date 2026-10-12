@@ -17,6 +17,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +48,10 @@ fun HomeScreen(store: LibraryStore) {
     // "默认启动模块" is about where the app opens, so it is read once here rather than
     // moving the tab whenever the setting changes.
     var tab by remember { mutableStateOf(initialTab(store)) }
+    /** "显示记录模块" — the index stays at 3 so the other tabs keep their tags; only
+     * the item and, below, its screen are skipped. */
+    val showRecordModule = remember { store.prefBool("ui.showRecordModule", true) }
+    val recordTab = 3
     val tabs = listOf(
         Tab("媒体库", Icons.Filled.VideoLibrary),
         Tab("服务器", Icons.Filled.Dns),
@@ -55,11 +60,17 @@ fun HomeScreen(store: LibraryStore) {
         Tab("设置", Icons.Filled.Settings)
     )
 
+    // A tab that is no longer offered must not stay selected.
+    LaunchedEffect(showRecordModule) {
+        if (!showRecordModule && tab == recordTab) tab = 0
+    }
+
     Scaffold(
         topBar = { TopAppBar(title = { Text(tabs[tab].label) }) },
         bottomBar = {
             NavigationBar {
                 tabs.forEachIndexed { index, item ->
+                    if (index == recordTab && !showRecordModule) return@forEachIndexed
                     NavigationBarItem(
                         selected = tab == index,
                         onClick = { tab = index },

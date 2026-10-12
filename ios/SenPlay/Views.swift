@@ -8,6 +8,9 @@ struct HomeView: View {
     /// because @AppStorage is per-view and this is the one view they all sit under.
     @AppStorage("pref.general.themeColor") private var themeColor = "blue"
     @AppStorage("pref.general.defaultModule") private var defaultModule = "files"
+    /// "显示记录模块" — hides the playback-history tab. The tag is kept at 3 so the
+    /// other tabs do not shift under the viewer when it is turned off.
+    @AppStorage("pref.ui.showRecordModule") private var showRecordModule = true
     /// "默认启动模块" is about where the app opens, so the choice is read once at
     /// construction rather than moving the tab under the viewer when it changes.
     @State private var selection: Int = HomeView.tabIndex(
@@ -51,15 +54,20 @@ struct HomeView: View {
                 .tabItem { Label("IPTV", systemImage: "tv") }
                 .tag(2)
 
-            HistoryView(store: store, pending: $pending)
-                .tabItem { Label("记录", systemImage: "clock.arrow.circlepath") }
-                .tag(3)
+            if showRecordModule {
+                HistoryView(store: store, pending: $pending)
+                    .tabItem { Label("记录", systemImage: "clock.arrow.circlepath") }
+                    .tag(3)
+            }
 
             PreferencesView()
                 .tabItem { Label("设置", systemImage: "gearshape") }
                 .tag(4)
         }
         .tint(accent)
+        .onChange(of: showRecordModule) { shown in
+            if !shown, selection == 3 { selection = 0 }
+        }
     }
 }
 
