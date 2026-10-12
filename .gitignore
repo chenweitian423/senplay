@@ -23,3 +23,6 @@ local.properties
 # --- kernel probe scaffold ---
 .github/kernel-probe/build
 .github/kernel-probe/*.xcodeproj
+
+# Device (unsigned IPA) build products, separate from the simulator build.
+ios/build-device/
